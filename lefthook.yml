@@ -1,0 +1,21 @@
+# https://lefthook.dev/configuration.html
+pre-commit:
+  commands:
+    biome:
+      glob: "*.{js,ts,jsx,tsx,json,jsonc,css}"
+      run: pnpm exec biome check --no-errors-on-unmatched --files-ignore-unknown=true {staged_files}
+      stage_fixed: true
+
+    tsc:
+      glob: "*.{ts,tsx}"
+      run: pnpm exec tsc --noEmit
+      # one tsc pass covers whole project — skip if only non-TS files staged
+      skip: &skipIfNoTsFiles
+        - match: "{!(*.ts|*.tsx)}"
+
+pre-push:
+  commands:
+    test:
+      skip: &skipIfNoTestFiles
+        - ref: main
+      run: pnpm exec vitest run --silent=passed-only

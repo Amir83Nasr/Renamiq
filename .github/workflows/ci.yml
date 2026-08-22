@@ -25,7 +25,7 @@ jobs:
 
       - run: pnpm exec tsc --noEmit
 
-      - run: pnpm exec vitest run
+      - run: pnpm test
 
   rust:
     name: Clippy & test (rust)

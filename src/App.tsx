@@ -1,51 +1,64 @@
-import { invoke } from "@tauri-apps/api/core";
+import { Captions, Film, FolderTree, History, Settings as SettingsIcon } from "lucide-react";
 import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import "./App.css";
+import { t } from "@/i18n";
+import { cn } from "@/lib/utils";
+import ActivityPage from "@/pages/ActivityPage";
+import LibraryPage from "@/pages/LibraryPage";
+import OrganizePage from "@/pages/OrganizePage";
+import SettingsPage from "@/pages/SettingsPage";
+import SubtitlesPage from "@/pages/SubtitlesPage";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+const NAV = [
+  { id: "library", icon: Film, label: t("nav.library") },
+  { id: "organize", icon: FolderTree, label: t("nav.organize") },
+  { id: "subtitles", icon: Captions, label: t("nav.subtitles") },
+  { id: "activity", icon: History, label: t("nav.activity") },
+  { id: "settings", icon: SettingsIcon, label: t("nav.settings") },
+] as const;
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+type PageId = (typeof NAV)[number]["id"];
+
+export default function App() {
+  const [page, setPage] = useState<PageId>("library");
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <div className="flex h-screen">
+      <nav className="flex w-48 shrink-0 flex-col border-r bg-card px-2 py-4">
+        <div className="mb-6 flex items-center gap-2 px-3">
+          <span className="text-base font-semibold tracking-tight">{t("app.title")}</span>
+        </div>
+        <ul className="space-y-1">
+          {NAV.map(({ id, icon: Icon, label }) => (
+            <li key={id}>
+              <button
+                type="button"
+                onClick={() => setPage(id)}
+                aria-current={page === id ? "page" : undefined}
+                className={cn(
+                  "flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
+                  page === id
+                    ? "bg-accent font-medium text-foreground"
+                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
+                )}
+              >
+                <Icon className="size-4" />
+                {label}
+              </button>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-auto px-3 text-[11px] leading-tight text-muted-foreground/60">
+          {t("app.tagline")}
+        </p>
+      </nav>
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank" rel="noopener">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank" rel="noopener">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank" rel="noopener">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+      <main className="min-w-0 flex-1 overflow-hidden">
+        {page === "library" && <LibraryPage />}
+        {page === "organize" && <OrganizePage />}
+        {page === "subtitles" && <SubtitlesPage />}
+        {page === "activity" && <ActivityPage />}
+        {page === "settings" && <SettingsPage />}
+      </main>
+    </div>
   );
 }
-
-export default App;

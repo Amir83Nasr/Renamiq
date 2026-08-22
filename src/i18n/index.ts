@@ -45,7 +45,7 @@ export function t(key: MessageKey, params?: Record<string, string | number>): st
   let text: string = dictionaries[locale][key] ?? key;
   if (params) {
     for (const [name, value] of Object.entries(params)) {
-      text = text.replaceAll(`{${name}}`, String(value));
+      text = text.split(`{${name}}`).join(String(value));
     }
   }
   return text;

@@ -8,7 +8,7 @@ interface SeparatorProps extends React.HTMLAttributes<HTMLDivElement> {
 const Separator = React.forwardRef<HTMLDivElement, SeparatorProps>(
   ({ className, orientation = "horizontal", ...props }, ref) => (
     // biome-ignore lint/a11y/useFocusableInteractive: divider is not interactive by design
-    // biome-ignore lint/a11y/useSemanticElements: shadcn separator keeps div for className styling
+    // biome-ignore lint/a11y/useSemanticElements: keeps div for className styling
     <div
       ref={ref}
       // biome-ignore lint/a11y/useAriaPropsForRole: separator needs no aria-valuenow, orientation given below

@@ -42,38 +42,42 @@ export interface ScanResult {
 }
 
 /** A rename/move operation proposed by the planner. */
-export type OperationType = "rename" | "move" | "copy" | "delete";
+export type OperationType = "rename" | "move";
 
-export interface PlannedOperation {
+export interface PlannedOp {
   id: string;
-  type: OperationType;
+  kind: OperationType;
   source: string;
   destination: string;
-  status: "pending" | "running" | "done" | "failed" | "skipped";
-  error: string | null;
+  /** Destination already exists on disk (needs user decision). */
+  collidesOnDisk: boolean;
+  /** Another planned op targets the same destination. */
+  duplicateInPlan: boolean;
+}
+
+export interface SkippedFile {
+  path: string;
+  reason: string;
 }
 
 export interface RenamePlan {
-  id: string;
   root: string;
-  operations: PlannedOperation[];
-  createdAt: string;
+  ops: PlannedOp[];
+  skipped: SkippedFile[];
 }
 
-export interface SubtitleMatch {
-  videoPath: string;
-  subtitlePath: string;
-  language: string;
-  confidence: number; // 0..100
-  signals: string[];
-}
-
-export interface OperationRecord {
+export interface OpResult {
   id: string;
+  ok: boolean;
+  error: string | null;
+}
+
+export interface OperationHistoryItem {
+  id: number;
   kind: string;
   summary: string;
-  itemCount: number;
-  status: "completed" | "failed" | "partial";
-  timestamp: string;
+  status: string;
+  createdAt: string;
   canUndo: boolean;
+  itemCount: number;
 }

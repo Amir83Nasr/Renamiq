@@ -5,24 +5,24 @@ pub const NOISE_TOKENS: &[&str] = &[
     // Resolution
     "2160p", "1080p", "1080i", "720p", "576p", "540p", "480p", "4k", "8k",
     // Source
-    "webdl", "web dl", "webrip", "web", "bluray", "blu ray", "bdrip", "bd",
+    "webdl", "webdl2", "webrip", "web", "bluray", "blurayremux", "bdrip", "bd",
     "brrip", "dvdrip", "dvd", "hdrip", "hdtv", "pdtv", "remux", "hc",
     // Codecs
-    "x264", "x265", "xvid", "divx", "h264", "h265", "h 264", "h 265",
-    "avc", "hevc", "av1", "vp9", "mpeg2", "vc1",
-    "10bit", "8bit", "hdr", "hdr10", "hdr10plus", "dolby vision", "dv",
+    "x264", "x265", "xvid", "divx", "h264", "h265", "h2642", "avc", "hevc",
+    "av1", "vp9", "mpeg2", "vc1", "10bit", "8bit", "hdr", "hdr10",
+    "hdr10plus", "dolbyvision", "dv",
     // Audio
-    "aac", "ac3", "eac3", "dd", "ddp", "ddplus", "ddp5 1", "dd5 1", "dd7 1",
-    "dts", "dtshd", "dts hd", "truehd", "atmos", "dolby atmos", "flac",
-    "mp3", "opus", "truehdd", "thd",
+    "aac", "ac3", "eac3", "dd", "ddp", "ddplus", "ddp51", "dd51", "dd71",
+    "dts", "dtshd", "dtshdma", "truehd", "atmos", "dolbyatmos", "flac",
+    "mp3", "opus",
     // Editions / flags
     "proper", "repack", "extended", "uncut", "uncensored", "remastered",
-    "imax", "hybrid", "internal", "limited", "complete", "dual audio",
-    "ws", "nfo", "read nfo",
+    "imax", "hybrid", "internal", "limited", "complete", "dualaudio",
+    "nfo", "readnfo",
     // Scene site tags
     "rarbg", "yts", "yify", "eztv", "ettv", "torrentgalaxy", "tgx",
-    "galaxyrg", "hdatmos", "dsnp", "amzn", "nf", "atvp", "hmax", "max",
-    "pmtp", "it", "stv", "cr", "pcok", "orarbg", "rarbg com",
+    "galaxyrg", "dsnp", "amzn", "nf", "atvp", "hmax", "pmtp", "stv",
+    "orarbg",
 ];
 
 /// Tokens that look like noise but can be part of a title (e.g. the movie

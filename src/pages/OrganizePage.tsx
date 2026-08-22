@@ -10,7 +10,8 @@ import { buildRenamePlan, executeOperations } from "@/lib/tauri";
 import { useAppStore } from "@/stores/app";
 
 export default function OrganizePage() {
-  const { scan, plan, organize, setPlan, executing, setExecuting, setError } = useAppStore();
+  const { scan, plan, organize, setPlan, executing, setExecuting, setError } =
+    useAppStore();
   const [disabledIds, setDisabledIds] = useState<Set<string>>(new Set());
   const [results, setResults] = useState<Map<string, boolean>>(new Map());
 
@@ -48,7 +49,9 @@ export default function OrganizePage() {
     setExecuting(true);
     setError(null);
     try {
-      const toRun = plan.ops.filter((op) => !disabledIds.has(op.id) && !op.collidesOnDisk);
+      const toRun = plan.ops.filter(
+        (op) => !disabledIds.has(op.id) && !op.collidesOnDisk,
+      );
       const res = await executeOperations(toRun, []);
       setResults(new Map(res.map((r) => [r.id, r.ok])));
       await regenerate();
@@ -66,7 +69,8 @@ export default function OrganizePage() {
         <div className="flex items-center gap-2">
           {blockedCount > 0 && (
             <Badge variant="warning">
-              <AlertTriangle /> {blockedCount} collision{blockedCount > 1 ? "s" : ""}
+              <AlertTriangle /> {blockedCount} collision
+              {blockedCount > 1 ? "s" : ""}
             </Badge>
           )}
           <span className="text-sm text-muted-foreground">
@@ -75,9 +79,13 @@ export default function OrganizePage() {
         </div>
       </header>
 
-      {!scan && <p className="text-sm text-muted-foreground">Scan a folder first.</p>}
+      {!scan && (
+        <p className="text-sm text-muted-foreground">Scan a folder first.</p>
+      )}
       {scan && plan && ops.length === 0 && (
-        <p className="text-sm text-muted-foreground">Nothing to rename — all names are clean.</p>
+        <p className="text-sm text-muted-foreground">
+          Nothing to rename — all names are clean.
+        </p>
       )}
 
       <ScrollArea className="flex-1 rounded-lg border bg-card">
@@ -85,7 +93,10 @@ export default function OrganizePage() {
           {ops.map((op) => {
             const resultOk = results.get(op.id);
             return (
-              <li key={op.id} className="flex items-start gap-3 px-4 py-3 text-sm">
+              <li
+                key={op.id}
+                className="flex items-start gap-3 px-4 py-3 text-sm"
+              >
                 <Checkbox
                   className="mt-1"
                   checked={!disabledIds.has(op.id)}
@@ -105,8 +116,12 @@ export default function OrganizePage() {
                     <span className="truncate">{dirName(op.destination)}</span>
                   </div>
                 </div>
-                {resultOk === true && <CheckCircle2 className="size-4 text-success" />}
-                {resultOk === false && <Ban className="size-4 text-destructive" />}
+                {resultOk === true && (
+                  <CheckCircle2 className="size-4 text-success" />
+                )}
+                {resultOk === false && (
+                  <Ban className="size-4 text-destructive" />
+                )}
                 {op.collidesOnDisk && resultOk === undefined && (
                   <Badge variant="destructive">exists</Badge>
                 )}
@@ -120,7 +135,8 @@ export default function OrganizePage() {
         <Card>
           <CardContent className="flex items-center justify-between py-3">
             <p className="text-xs text-muted-foreground">
-              Collisions are never replaced automatically. Skipped files stay untouched.
+              Collisions are never replaced automatically. Skipped files stay
+              untouched.
             </p>
             <Button onClick={handleApply} disabled={executing}>
               {executing ? "Applying…" : t("organize.apply")}

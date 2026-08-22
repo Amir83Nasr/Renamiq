@@ -2,7 +2,12 @@ import { History, Undo2 } from "lucide-react";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useOperations } from "@/hooks/useOperations";
 
@@ -51,7 +56,9 @@ export default function ActivityPage() {
           <CardHeader className="items-center text-center">
             <History className="size-10 text-muted-foreground" />
             <CardTitle>No activity yet</CardTitle>
-            <CardDescription>Applied renames will appear here with undo support.</CardDescription>
+            <CardDescription>
+              Applied renames will appear here with undo support.
+            </CardDescription>
           </CardHeader>
         </Card>
       )}
@@ -59,16 +66,24 @@ export default function ActivityPage() {
       <ScrollArea className="flex-1">
         <ul className="divide-y divide-border rounded-lg border bg-card">
           {operations.map((op) => (
-            <li key={op.id} className="flex items-center gap-3 px-4 py-3 text-sm">
-              <Badge variant={op.status === "completed" ? "success" : "destructive"}>
+            <li
+              key={op.id}
+              className="flex items-center gap-3 px-4 py-3 text-sm"
+            >
+              <Badge
+                variant={op.status === "completed" ? "success" : "destructive"}
+              >
                 {op.kind}
               </Badge>
               <span className="flex-1">{op.summary}</span>
-              <span className="text-xs text-muted-foreground">{op.createdAt}</span>
+              <span className="text-xs text-muted-foreground">
+                {op.createdAt}
+              </span>
               {op.canUndo &&
-                op.id === Math.max(...operations.filter((o) => o.canUndo).map((o) => o.id)) && (
-                  <Badge variant="secondary">undoable</Badge>
-                )}
+                op.id ===
+                  Math.max(
+                    ...operations.filter((o) => o.canUndo).map((o) => o.id),
+                  ) && <Badge variant="secondary">undoable</Badge>}
             </li>
           ))}
         </ul>

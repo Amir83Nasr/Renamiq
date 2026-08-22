@@ -1,7 +1,12 @@
 import { Captions } from "lucide-react";
 import { useMemo } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { t } from "@/i18n";
 import { useAppStore } from "@/stores/app";
 
@@ -11,7 +16,10 @@ export default function SubtitlesPage() {
   const { plan } = useAppStore();
 
   const subtitleOps = useMemo(
-    () => plan?.ops.filter((op) => op.destination.match(/\.(srt|ass|ssa|sub|vtt)$/i)) ?? [],
+    () =>
+      plan?.ops.filter((op) =>
+        op.destination.match(/\.(srt|ass|ssa|sub|vtt)$/i),
+      ) ?? [],
     [plan],
   );
 
@@ -20,7 +28,8 @@ export default function SubtitlesPage() {
       <header>
         <h1 className="text-lg font-semibold">{t("nav.subtitles")}</h1>
         <p className="text-sm text-muted-foreground">
-          External subtitles are matched to videos by name similarity and moved together with them.
+          External subtitles are matched to videos by name similarity and moved
+          together with them.
         </p>
       </header>
 
@@ -37,7 +46,10 @@ export default function SubtitlesPage() {
       ) : (
         <ul className="divide-y divide-border rounded-lg border bg-card">
           {subtitleOps.map((op) => {
-            const lang = op.destination.match(/\.([a-z]{2})\.(srt|ass|ssa|sub|vtt)$/i)?.[1] ?? "?";
+            const lang =
+              op.destination.match(
+                /\.([a-z]{2})\.(srt|ass|ssa|sub|vtt)$/i,
+              )?.[1] ?? "?";
             return (
               <li key={op.id} className="space-y-1 px-4 py-3 text-sm">
                 <div className="flex items-center gap-2 font-medium">
@@ -45,7 +57,9 @@ export default function SubtitlesPage() {
                   {fileName(op.destination)}
                   <Badge variant="secondary">{lang.toUpperCase()}</Badge>
                 </div>
-                <p className="truncate text-xs text-muted-foreground">{dirName(op.destination)}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {dirName(op.destination)}
+                </p>
               </li>
             );
           })}

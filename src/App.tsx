@@ -1,4 +1,10 @@
-import { Captions, Film, FolderTree, History, Settings as SettingsIcon } from "lucide-react";
+import {
+  Captions,
+  Film,
+  FolderTree,
+  History,
+  Settings as SettingsIcon,
+} from "lucide-react";
 import { useState } from "react";
 import { t } from "@/i18n";
 import { cn } from "@/lib/utils";
@@ -25,7 +31,9 @@ export default function App() {
     <div className="flex h-screen">
       <nav className="flex w-48 shrink-0 flex-col border-r bg-card px-2 py-4">
         <div className="mb-6 flex items-center gap-2 px-3">
-          <span className="text-base font-semibold tracking-tight">{t("app.title")}</span>
+          <span className="text-base font-semibold tracking-tight">
+            {t("app.title")}
+          </span>
         </div>
         <ul className="space-y-1">
           {NAV.map(({ id, icon: Icon, label }) => (

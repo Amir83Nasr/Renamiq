@@ -1,14 +1,24 @@
 /** Typed wrappers around Tauri commands. UI never calls invoke() raw. */
 import { invoke } from "@tauri-apps/api/core";
-import type { OperationHistoryItem, RenamePlan, ScannedFile, ScanResult } from "@/types/media";
+import type {
+  OperationHistoryItem,
+  RenamePlan,
+  ScannedFile,
+  ScanResult,
+} from "@/types/media";
 
 export async function scanFolder(path: string): Promise<ScanResult> {
   return invoke("scan_folder", { args: { path } });
 }
 
-export async function buildRenamePlan(scan: ScanResult, organize: boolean): Promise<RenamePlan> {
+export async function buildRenamePlan(
+  scan: ScanResult,
+  organize: boolean,
+): Promise<RenamePlan> {
   const files = scan.files as unknown as ScannedFile[];
-  return invoke("build_rename_plan", { args: { scan: { ...scan, files }, organize } });
+  return invoke("build_rename_plan", {
+    args: { scan: { ...scan, files }, organize },
+  });
 }
 
 export async function executeOperations(

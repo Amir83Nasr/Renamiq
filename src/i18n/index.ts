@@ -41,7 +41,10 @@ export function getLocale(): Locale {
   return locale;
 }
 
-export function t(key: MessageKey, params?: Record<string, string | number>): string {
+export function t(
+  key: MessageKey,
+  params?: Record<string, string | number>,
+): string {
   let text: string = dictionaries[locale][key] ?? key;
   if (params) {
     for (const [name, value] of Object.entries(params)) {

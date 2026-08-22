@@ -1,4 +1,10 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -13,7 +19,10 @@ export default function SettingsPage() {
         <CardHeader>
           <CardTitle>Naming templates</CardTitle>
           <CardDescription>
-            Placeholders: {"{title} {year} {season} {episode} {resolution} {codec} {language}"}
+            Placeholders:{" "}
+            {
+              "{title} {year} {season} {episode} {resolution} {codec} {language}"
+            }
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -23,7 +32,11 @@ export default function SettingsPage() {
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="tpl-tv">TV episode</Label>
-            <Input id="tpl-tv" value="{title} S{season:02} E{episode:02}" readOnly />
+            <Input
+              id="tpl-tv"
+              value="{title} S{season:02} E{episode:02}"
+              readOnly
+            />
           </div>
         </CardContent>
       </Card>

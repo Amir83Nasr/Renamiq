@@ -1,7 +1,13 @@
 import { Film, FolderOpen, RefreshCw, Tv } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
 import { t } from "@/i18n";
@@ -46,7 +52,8 @@ export default function LibraryPage() {
     }
   };
 
-  const videos = scan?.files.filter((f: ScannedFile) => f.role === "video") ?? [];
+  const videos =
+    scan?.files.filter((f: ScannedFile) => f.role === "video") ?? [];
 
   return (
     <div className="flex h-full flex-col gap-4 p-6">
@@ -64,7 +71,11 @@ export default function LibraryPage() {
             </label>
           )}
           {root && (
-            <Button variant="outline" onClick={() => handleScan()} disabled={scanning}>
+            <Button
+              variant="outline"
+              onClick={() => handleScan()}
+              disabled={scanning}
+            >
               <RefreshCw /> {scanning ? t("library.scanning") : "Rescan"}
             </Button>
           )}
@@ -76,7 +87,9 @@ export default function LibraryPage() {
 
       {error && (
         <Card className="border-destructive">
-          <CardContent className="pt-6 text-sm text-destructive">{error}</CardContent>
+          <CardContent className="pt-6 text-sm text-destructive">
+            {error}
+          </CardContent>
         </Card>
       )}
 
@@ -97,7 +110,10 @@ export default function LibraryPage() {
           <ScrollArea className="flex-1 rounded-lg border">
             <ul className="divide-y divide-border">
               {videos.map((f) => (
-                <li key={f.path} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                <li
+                  key={f.path}
+                  className="flex items-center gap-3 px-4 py-2.5 text-sm"
+                >
                   {f.parsed?.kind === "tv" ? (
                     <Tv className="size-4 shrink-0 text-primary" />
                   ) : (
@@ -105,13 +121,17 @@ export default function LibraryPage() {
                   )}
                   <span className="min-w-0 flex-1 truncate">{f.name}</span>
                   {f.parsed && f.parsed.kind !== "unknown" && (
-                    <Badge variant={f.parsed.lowConfidence ? "warning" : "secondary"}>
+                    <Badge
+                      variant={f.parsed.lowConfidence ? "warning" : "secondary"}
+                    >
                       {f.parsed.kind === "tv"
                         ? `S${String(f.parsed.season ?? 0).padStart(2, "0")} E${String(f.parsed.episode ?? 0).padStart(2, "0")}`
                         : (f.parsed.year ?? "?")}
                     </Badge>
                   )}
-                  {f.parsed?.resolution && <Badge variant="outline">{f.parsed.resolution}</Badge>}
+                  {f.parsed?.resolution && (
+                    <Badge variant="outline">{f.parsed.resolution}</Badge>
+                  )}
                 </li>
               ))}
             </ul>

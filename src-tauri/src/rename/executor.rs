@@ -19,10 +19,7 @@ pub struct OpResult {
 /// Execute planned ops sequentially. Ops flagged as collisions are skipped
 /// unless `resolve` says otherwise (caller decides Skip/Replace per file).
 /// Never overwrites silently: without a resolve callback collisions fail.
-pub fn execute_plan(
-    ops: &[PlannedOp],
-    overwrite_ids: &[String],
-) -> AppResult<Vec<OpResult>> {
+pub fn execute_plan(ops: &[PlannedOp], overwrite_ids: &[String]) -> AppResult<Vec<OpResult>> {
     let mut results = Vec::with_capacity(ops.len());
     for op in ops {
         if op.collides_on_disk && !overwrite_ids.contains(&op.id) {
@@ -34,7 +31,11 @@ pub fn execute_plan(
             continue;
         }
         match apply_op(op) {
-            Ok(()) => results.push(OpResult { id: op.id.clone(), ok: true, error: None }),
+            Ok(()) => results.push(OpResult {
+                id: op.id.clone(),
+                ok: true,
+                error: None,
+            }),
             Err(err) => results.push(OpResult {
                 id: op.id.clone(),
                 ok: false,
@@ -54,10 +55,7 @@ fn apply_op(op: &PlannedOp) -> AppResult<()> {
     }
     if let Some(parent) = op.destination.parent() {
         fs::create_dir_all(parent).map_err(|e| {
-            RenamiqError::with_source(
-                format!("Could not create folder {}", parent.display()),
-                e,
-            )
+            RenamiqError::with_source(format!("Could not create folder {}", parent.display()), e)
         })?;
     }
     // Same-volume rename covers move within one filesystem; fall back to
@@ -65,12 +63,14 @@ fn apply_op(op: &PlannedOp) -> AppResult<()> {
     // rename semantics; for copy path the delete happens only after copy OK.
     if let Err(err) = fs::rename(&op.source, &op.destination) {
         if err.kind() == std::io::ErrorKind::CrossesDevices {
-            fs::copy(&op.source, &op.destination).map_err(|e| {
-                RenamiqError::with_source("Copy before move failed", e)
-            })?;
+            fs::copy(&op.source, &op.destination)
+                .map_err(|e| RenamiqError::with_source("Copy before move failed", e))?;
             fs::remove_file(&op.source).map_err(|e| {
                 RenamiqError::with_source(
-                    format!("Moved but could not remove original {}", op.source.display()),
+                    format!(
+                        "Moved but could not remove original {}",
+                        op.source.display()
+                    ),
                     e,
                 )
             })?;

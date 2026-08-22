@@ -67,7 +67,9 @@ struct JournalRow {
 }
 
 fn record_operation(db: &State<'_, Db>, kind: &str, journal: &[JournalRow]) -> AppResult<()> {
-    let conn = db.0.lock().map_err(|_| RenamiqError::user("Database busy"))?;
+    let conn =
+        db.0.lock()
+            .map_err(|_| RenamiqError::user("Database busy"))?;
     let json = serde_json::to_string(journal)
         .map_err(|e| RenamiqError::with_source("Could not serialize journal", e))?;
     conn.execute(
@@ -96,7 +98,9 @@ pub struct OperationHistoryItem {
 
 #[tauri::command]
 pub fn list_operations(db: State<'_, Db>) -> AppResult<Vec<OperationHistoryItem>> {
-    let conn = db.0.lock().map_err(|_| RenamiqError::user("Database busy"))?;
+    let conn =
+        db.0.lock()
+            .map_err(|_| RenamiqError::user("Database busy"))?;
     let mut stmt = conn
         .prepare("SELECT id, kind, summary, status, created_at, undo_journal FROM operations ORDER BY id DESC LIMIT 200")
         .map_err(|e| RenamiqError::with_source("Could not read history", e))?;
@@ -127,7 +131,9 @@ pub fn list_operations(db: State<'_, Db>) -> AppResult<Vec<OperationHistoryItem>
 /// backwards. Only renames/moves are journaled, so reversal is exact.
 #[tauri::command]
 pub fn undo_last_operation(db: State<'_, Db>) -> AppResult<String> {
-    let conn = db.0.lock().map_err(|_| RenamiqError::user("Database busy"))?;
+    let conn =
+        db.0.lock()
+            .map_err(|_| RenamiqError::user("Database busy"))?;
     let row: Option<(i64, String)> = conn
         .query_row(
             "SELECT id, undo_journal FROM operations WHERE undo_journal IS NOT NULL ORDER BY id DESC LIMIT 1",
@@ -156,15 +162,15 @@ pub fn undo_last_operation(db: State<'_, Db>) -> AppResult<String> {
                 let _ = std::fs::create_dir_all(parent);
             }
             std::fs::rename(&from, &to).map_err(|e| {
-                RenamiqError::with_source(
-                    format!("Could not restore {}", to.display()),
-                    e,
-                )
+                RenamiqError::with_source(format!("Could not restore {}", to.display()), e)
             })?;
             undone += 1;
         }
     }
-    conn.execute("UPDATE operations SET undo_journal = NULL WHERE id = ?1", [op_id])
-        .map_err(|e| RenamiqError::with_source("Could not update history", e))?;
+    conn.execute(
+        "UPDATE operations SET undo_journal = NULL WHERE id = ?1",
+        [op_id],
+    )
+    .map_err(|e| RenamiqError::with_source("Could not update history", e))?;
     Ok(format!("Restored {undone} file(s)"))
 }

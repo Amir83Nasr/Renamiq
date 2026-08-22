@@ -71,7 +71,11 @@ fn migrate(conn: &Connection) -> AppResult<()> {
     .map_err(|e| RenamiqError::with_source("Migration bookkeeping failed", e))?;
 
     let current: i64 = conn
-        .query_row("SELECT COALESCE(MAX(version), 0) FROM _migrations", [], |r| r.get(0))
+        .query_row(
+            "SELECT COALESCE(MAX(version), 0) FROM _migrations",
+            [],
+            |r| r.get(0),
+        )
         .map_err(|e| RenamiqError::with_source("Could not read migrations", e))?;
 
     for (i, sql) in MIGRATIONS.iter().enumerate() {

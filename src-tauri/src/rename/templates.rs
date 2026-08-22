@@ -105,7 +105,10 @@ mod tests {
         p.episode = None;
         p.year = Some(2026);
         p.title = "Obsession".into();
-        assert_eq!(render_template(default_template(MediaKind::Movie), &p), "Obsession 2026");
+        assert_eq!(
+            render_template(default_template(MediaKind::Movie), &p),
+            "Obsession 2026"
+        );
     }
 
     #[test]

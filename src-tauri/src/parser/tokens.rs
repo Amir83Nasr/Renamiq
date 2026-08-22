@@ -1,4 +1,4 @@
-/// Structural markers: season/episode patterns and year positions.
+//! Structural markers: season/episode patterns and year positions.
 
 #[cfg(test)]
 use crate::parser::normalize::tokenize;
@@ -27,7 +27,7 @@ pub fn find_episode_marker(tokens: &[String]) -> Option<EpisodeHit> {
 
     for i in 0..tokens.len() {
         if let Some(hit) = try_sxxexx_at(i, tokens) {
-            if best.as_ref().map_or(true, |(s, _)| *s < 3) {
+            if best.as_ref().is_none_or(|(s, _)| *s < 3) {
                 best = Some((3, hit));
             }
         } else if let Some(hit) = try_sx_ep_at(i, tokens) {
@@ -43,10 +43,7 @@ pub fn find_episode_marker(tokens: &[String]) -> Option<EpisodeHit> {
 fn try_sxxexx_at(i: usize, tokens: &[String]) -> Option<EpisodeHit> {
     let t = &tokens[i];
     if let Some((s, e)) = parse_se_token(t) {
-        let season_end = 1 + t[1..]
-            .to_lowercase()
-            .find('e')
-            .unwrap_or(t.len() - 1);
+        let season_end = 1 + t[1..].to_lowercase().find('e').unwrap_or(t.len() - 1);
         return finish_hit(i, s, vec![e], 1, season_end, tokens);
     }
     // Split form: "S01 E01"
@@ -106,8 +103,7 @@ fn extend_episodes(
             rest = &after_e[digits.len()..];
         }
         while let Some(after_e) = rest.strip_prefix('e') {
-            let digits: String =
-                after_e.chars().take_while(|c| c.is_ascii_digit()).collect();
+            let digits: String = after_e.chars().take_while(|c| c.is_ascii_digit()).collect();
             if digits.is_empty() || eps.len() > 20 {
                 break;
             }
@@ -186,7 +182,11 @@ fn try_sx_ep_at(i: usize, tokens: &[String]) -> Option<EpisodeHit> {
     let t = &tokens[i];
     if let Some(x) = t.find(['x', 'X']) {
         let (a, b) = (&t[..x], &t[x + 1..]);
-        if !a.is_empty() && !b.is_empty() && a.chars().all(|c| c.is_ascii_digit()) && b.chars().all(|c| c.is_ascii_digit()) {
+        if !a.is_empty()
+            && !b.is_empty()
+            && a.chars().all(|c| c.is_ascii_digit())
+            && b.chars().all(|c| c.is_ascii_digit())
+        {
             if let (Ok(s), Ok(e)) = (a.parse::<u8>(), b.parse::<u8>()) {
                 return finish_hit(i, s, vec![e], 1, t.len(), tokens);
             }
@@ -218,7 +218,9 @@ pub fn find_year_marker(tokens: &[String]) -> Option<usize> {
         let clean = t.trim_matches(|c: char| !c.is_ascii_alphanumeric());
         clean.len() == 4
             && clean.chars().all(|c| c.is_ascii_digit())
-            && clean.parse::<u16>().map_or(false, |y| (1900..=2100).contains(&y))
+            && clean
+                .parse::<u16>()
+                .is_ok_and(|y| (1900..=2100).contains(&y))
     })
 }
 

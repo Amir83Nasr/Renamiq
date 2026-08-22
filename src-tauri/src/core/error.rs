@@ -13,14 +13,20 @@ pub enum RenamiqError {
 
 impl RenamiqError {
     pub fn user(message: impl Into<String>) -> Self {
-        RenamiqError::User { message: message.into(), source: None }
+        RenamiqError::User {
+            message: message.into(),
+            source: None,
+        }
     }
 
     pub fn with_source(
         message: impl Into<String>,
         source: impl Into<Box<dyn std::error::Error + Send + Sync>>,
     ) -> Self {
-        RenamiqError::User { message: message.into(), source: Some(source.into()) }
+        RenamiqError::User {
+            message: message.into(),
+            source: Some(source.into()),
+        }
     }
 }
 
@@ -43,7 +49,9 @@ impl From<RenamiqError> for ErrorPayload {
                 src = s.source();
             }
         }
-        ErrorPayload { message: err.to_string() }
+        ErrorPayload {
+            message: err.to_string(),
+        }
     }
 }
 

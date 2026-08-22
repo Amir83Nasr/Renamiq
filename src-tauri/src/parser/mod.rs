@@ -65,16 +65,16 @@ impl ParsedMedia {
 /// marker, then classify remaining trailing tokens.
 pub fn parse_filename(raw: &str) -> ParsedMedia {
     let (stem, _ext) = split_stem_and_ext(raw);
-    let tokens = tokenize(&stem);
+    let tokens = tokenize(stem);
 
     if let Some(hit) = tokens::find_episode_marker(&tokens) {
-        return parse_tv(&stem, &tokens, hit);
+        return parse_tv(stem, &tokens, hit);
     }
     if let Some(year) = tokens::find_year_marker(&tokens) {
-        return parse_movie(&stem, &tokens, year);
+        return parse_movie(stem, &tokens, year);
     }
     // No marker: treat everything before the first noise token as title.
-    parse_unmarked(&stem, &tokens)
+    parse_unmarked(stem, &tokens)
 }
 
 fn parse_tv(stem: &str, tokens: &[String], hit: tokens::EpisodeHit) -> ParsedMedia {
@@ -194,7 +194,9 @@ fn is_codec(t: &str) -> bool {
 
 fn is_audio(t: &str) -> bool {
     let l = t.to_lowercase();
-    l.starts_with("dd") || l.starts_with("dts") || ["aac", "ac3", "eac3", "flac", "atmos", "truehd"].contains(&l.as_str())
+    l.starts_with("dd")
+        || l.starts_with("dts")
+        || ["aac", "ac3", "eac3", "flac", "atmos", "truehd"].contains(&l.as_str())
 }
 
 fn is_edition(t: &str) -> bool {
@@ -284,8 +286,16 @@ mod tests {
 
     #[test]
     fn title_words_preserved_after_dots() {
-        assert_eq!(title_of("The.Last.of.Us.S02E03.1080p.WEB-DL.DDP5.1.H.264-NTb.mkv"), "The Last of Us");
-        assert_eq!(parse_filename("The.Last.of.Us.S02E03.1080p.WEB-DL.DDP5.1.H.264-NTb.mkv").group.as_deref(), Some("NTb"));
+        assert_eq!(
+            title_of("The.Last.of.Us.S02E03.1080p.WEB-DL.DDP5.1.H.264-NTb.mkv"),
+            "The Last of Us"
+        );
+        assert_eq!(
+            parse_filename("The.Last.of.Us.S02E03.1080p.WEB-DL.DDP5.1.H.264-NTb.mkv")
+                .group
+                .as_deref(),
+            Some("NTb")
+        );
     }
 
     #[test]

@@ -11,10 +11,7 @@ fn temp_tree(label: &str) -> PathBuf {
     use std::sync::atomic::{AtomicU32, Ordering};
     static COUNTER: AtomicU32 = AtomicU32::new(0);
     let n = COUNTER.fetch_add(1, Ordering::SeqCst);
-    let dir = std::env::temp_dir().join(format!(
-        "renamiq-test-{}-{label}-{n}",
-        std::process::id()
-    ));
+    let dir = std::env::temp_dir().join(format!("renamiq-test-{}-{label}-{n}", std::process::id()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     dir
@@ -23,10 +20,22 @@ fn temp_tree(label: &str) -> PathBuf {
 #[test]
 fn scan_parse_plan_end_to_end() {
     let root = temp_tree("e2e");
-    fs::write(root.join("Breaking.Bad.S01E01.1080p.WEB-DL.x265-GROUP.mkv"), b"v").unwrap();
+    fs::write(
+        root.join("Breaking.Bad.S01E01.1080p.WEB-DL.x265-GROUP.mkv"),
+        b"v",
+    )
+    .unwrap();
     fs::write(root.join("Breaking.Bad.S01E01.fa.srt"), b"s").unwrap();
-    fs::write(root.join("Breaking.Bad.S01E02.1080p.WEB-DL.x265-GROUP.mkv"), b"v").unwrap();
-    fs::write(root.join("Obsession.2026.1080p.WEB-DL.x265-GROUP.mkv"), b"v").unwrap();
+    fs::write(
+        root.join("Breaking.Bad.S01E02.1080p.WEB-DL.x265-GROUP.mkv"),
+        b"v",
+    )
+    .unwrap();
+    fs::write(
+        root.join("Obsession.2026.1080p.WEB-DL.x265-GROUP.mkv"),
+        b"v",
+    )
+    .unwrap();
     fs::write(root.join("notes.txt"), b"ignored").unwrap();
 
     let scan = scan_directory(&root).unwrap();
@@ -49,7 +58,8 @@ fn scan_parse_plan_end_to_end() {
         .ops
         .iter()
         .find(|op| {
-            op.source.to_string_lossy().contains("S01E01") && !op.source.to_string_lossy().contains("srt")
+            op.source.to_string_lossy().contains("S01E01")
+                && !op.source.to_string_lossy().contains("srt")
         })
         .unwrap();
     let dest = ep1.destination.to_string_lossy();
@@ -80,7 +90,10 @@ fn scan_parse_plan_end_to_end() {
         .find(|op| op.source.extension() == Some(OsStr::new("srt")))
         .unwrap();
     let sub_dest = sub.destination.to_string_lossy();
-    assert!(sub_dest.ends_with("Breaking Bad S01 E01.fa.srt"), "{sub_dest}");
+    assert!(
+        sub_dest.ends_with("Breaking Bad S01 E01.fa.srt"),
+        "{sub_dest}"
+    );
     assert!(sub_dest.contains("Season 01"), "{sub_dest}");
 
     fs::remove_dir_all(&root).ok();

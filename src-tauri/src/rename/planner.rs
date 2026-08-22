@@ -84,7 +84,10 @@ pub fn build_plan(root: &Path, files: &[ScannedFile], organize: bool) -> RenameP
     }
 
     // Subtitle files: attach to the nearest video plan by stem prefix.
-    for file in files.iter().filter(|f| f.role == crate::scanner::FileRole::Subtitle) {
+    for file in files
+        .iter()
+        .filter(|f| f.role == crate::scanner::FileRole::Subtitle)
+    {
         if let Some(dest) = subtitle_destination(root, files, &ops, file, organize) {
             if dest != file.path {
                 seq += 1;
@@ -141,7 +144,11 @@ fn destination_for(
         .extension()
         .map(|e| format!(".{}", e.to_string_lossy()))
         .unwrap_or_default();
-    let new_name = format!("{}{}", render_template(default_template(parsed.kind), parsed), ext);
+    let new_name = format!(
+        "{}{}",
+        render_template(default_template(parsed.kind), parsed),
+        ext
+    );
 
     if !organize {
         return Some(root.join(new_name));
@@ -180,18 +187,19 @@ fn subtitle_destination(
         .next()
         .map(|tok| {
             let cut = sub_stem.len() - tok.len();
-            sub_stem[..cut].trim_end_matches(['.', '_', ' ', '-']).to_string()
+            sub_stem[..cut]
+                .trim_end_matches(['.', '_', ' ', '-'])
+                .to_string()
         })
         .unwrap_or_else(|| sub_stem.clone());
 
     // Match against scanned videos by normalized base stem.
-    let lang_suffix = sub
-        .subtitle_language
-        .as_deref()
-        .unwrap_or("fa")
-        .to_string();
+    let lang_suffix = sub.subtitle_language.as_deref().unwrap_or("fa").to_string();
 
-    for video in files.iter().filter(|f| f.role == crate::scanner::FileRole::Video) {
+    for video in files
+        .iter()
+        .filter(|f| f.role == crate::scanner::FileRole::Video)
+    {
         if stems_match(&stem_of(&video.name), &sub_base) {
             // Find that video's planned destination to mirror it.
             let dest_video = ops
@@ -200,7 +208,10 @@ fn subtitle_destination(
                 .map(|op| op.destination.clone())
                 .unwrap_or_else(|| video.path.clone());
             let dir = if organize {
-                dest_video.parent().map(|p| p.to_path_buf()).unwrap_or_else(|| root.to_path_buf())
+                dest_video
+                    .parent()
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_else(|| root.to_path_buf())
             } else {
                 root.to_path_buf()
             };
@@ -214,7 +225,12 @@ fn subtitle_destination(
 /// Normalized-stem similarity: equal ignoring case/separators, or one is a
 /// prefix of the other (handles "Show.S01E01" vs "Show.S01E01.1080p").
 fn stems_match(video_stem: &str, sub_stem: &str) -> bool {
-    let norm = |s: &str| s.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect::<String>();
+    let norm = |s: &str| {
+        s.to_lowercase()
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .collect::<String>()
+    };
     let (a, b) = (norm(video_stem), norm(sub_stem));
     if a.is_empty() || b.is_empty() {
         return false;

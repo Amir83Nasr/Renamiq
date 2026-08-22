@@ -34,8 +34,8 @@ pub struct ScanResult {
 
 /// Extensions recognized as video. Lowercase, with dot.
 const VIDEO_EXTS: &[&str] = &[
-    ".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v",
-    ".mpg", ".mpeg", ".ts", ".m2ts",
+    ".mkv", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".mpg", ".mpeg", ".ts",
+    ".m2ts",
 ];
 
 const SUBTITLE_EXTS: &[&str] = &[".srt", ".ass", ".ssa", ".sub", ".vtt"];
@@ -68,7 +68,10 @@ pub fn scan_directory(root: &Path) -> std::io::Result<ScanResult> {
 const MAX_DEPTH: usize = 32;
 const MAX_FILES: usize = 100_000;
 const SKIP_DIRS: &[&str] = &[
-    "node_modules", "$RECYCLE.BIN", "System Volume Information", "lost+found",
+    "node_modules",
+    "$RECYCLE.BIN",
+    "System Volume Information",
+    "lost+found",
 ];
 
 fn is_hidden(name: &str) -> bool {

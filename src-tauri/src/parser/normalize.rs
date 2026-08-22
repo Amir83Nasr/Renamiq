@@ -1,7 +1,6 @@
 /// Filename → token list. Separators (`.`, `_`, space) become boundaries.
 /// Hyphens stay INSIDE tokens (`WEB-DL`, `x265-GROUP`) so release groups can
 /// be recovered from the last dash later; noise matching normalizes dashes.
-
 /// Split "name.ext" into ("name", ".ext").
 pub fn split_stem_and_ext(filename: &str) -> (&str, &str) {
     match filename.rfind('.') {

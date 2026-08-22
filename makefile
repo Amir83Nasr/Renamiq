@@ -24,6 +24,15 @@ install: ## Install dependencies (pnpm)
 hooks: ## Install git hooks (lefthook)
 	@pnpm exec lefthook install && echo "  ✓ Git hooks installed"
 
+precommit: ## Run lefthook pre-commit hooks manually
+	@pnpm exec lefthook run pre-commit && echo "  ✓ Pre-commit passed"
+
+prepush: ## Run lefthook pre-push hooks manually
+	@pnpm exec lefthook run pre-push && echo "  ✓ Pre-push passed"
+
+github-action: ## Simulate GitHub Actions locally
+	@./scripts/ci-simulator.sh
+
 # ─── Development ──────────────────────────────────────────────────────────────
 dev: ## Frontend dev server (Vite HMR)
 	@pnpm dev
@@ -51,18 +60,21 @@ fix: ## Lint with auto-fix (Biome safe fixes)
 typecheck: ## Type-check (tsc --noEmit)
 	@pnpm exec tsc --noEmit && echo "  ✓ Type check passed"
 
-test: ## Run tests (Vitest)
-	@pnpm test && echo "  ✓ Tests passed"
+test: ## Run all tests (Vitest + Cargo)
+	@pnpm test && cd src-tauri && cargo test && echo "  ✓ All tests passed"
 
 check: lint typecheck test build ## lint + typecheck + test + build
 	@echo "  ✓ All checks passed"
 
 rust: ## Rust checks (cargo fmt + clippy)
-	@cd renamiq/src-tauri && cargo fmt --check && cargo clippy -- -D warnings && echo "  ✓ Rust checks passed"
+	@cd src-tauri && cargo fmt --check && cargo clippy -- -D warnings && echo "  ✓ Rust checks passed"
 
 # ─── Maintenance ──────────────────────────────────────────────────────────────
 clean: ## Remove build output and target dir
-	@rm -rf dist renamiq/src-tauri/target && echo "  ✓ Cleaned"
+	@rm -rf dist src-tauri/target && echo "  ✓ Cleaned"
+
+generate-test-media: ## Generate dummy test media files
+	@./scripts/generate-test-media.sh
 
 # ─── Help ─────────────────────────────────────────────────────────────────────
 help: ## Show this help

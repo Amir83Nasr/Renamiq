@@ -1,7 +1,6 @@
 // ── FILE EDITOR (MANUAL OVERRIDE) ────────────────────────────
 
 import { EyeOff, X } from "lucide-react";
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,17 +26,15 @@ export function FileEditor() {
   const item = plan?.items.find((i) => i.path === selected);
   const ovr = selected ? (overrides[selected] ?? {}) : {};
 
-  // Local string state so typing feels instant. Reseeding happens in the
-  // parent: FileEditor is keyed by selection, so a new file remounts it.
-  const [title, setTitle] = useState(ovr.title ?? "");
-  const [customName, setCustomName] = useState(ovr.customName ?? "");
-
+  // State lives in the store; typing updates zustand synchronously and the
+  // plan rebuild is debounced in replan(). No local mirrors to resync.
   if (!file || !item) return null;
 
   const kind: MediaKind = ovr.kind ?? file.parsed?.kind ?? "unknown";
+  const title = ovr.title ?? "";
+  const customName = ovr.customName ?? "";
 
   const commitTitle = (value: string) => {
-    setTitle(value);
     if (value.trim()) setOverride(file.path, { title: value });
     else clearField("title");
   };
@@ -125,27 +122,26 @@ export function FileEditor() {
         <div className="flex items-center justify-between">
           <Label htmlFor="ed-custom">{t("editor.customName")}</Label>
           <Switch
-            checked={Boolean(ovr.customName ?? customName)}
+            checked={Boolean(customName)}
             onCheckedChange={(on) =>
               setOverride(file.path, {
                 customName: on
-                  ? customName || item.originalName.replace(/\.[^.]+$/, "")
+                  ? ovr.customName || item.originalName.replace(/\.[^.]+$/, "")
                   : undefined,
               })
             }
             aria-label={t("editor.customName")}
           />
         </div>
-        {(ovr.customName ?? customName) && (
+        {customName && (
           <>
             <Input
               id="ed-custom"
               dir="auto"
               value={customName}
-              onChange={(e) => {
-                setCustomName(e.target.value);
-                setOverride(file.path, { customName: e.target.value });
-              }}
+              onChange={(e) =>
+                setOverride(file.path, { customName: e.target.value })
+              }
             />
             <p className="text-xs text-muted-foreground">
               {t("editor.customNameHint")}

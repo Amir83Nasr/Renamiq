@@ -34,11 +34,13 @@ interface WorkspaceState {
   clearOverride: (path: string) => void;
   setResolution: (path: string, r: ConflictResolution | null) => void;
   clearAll: () => void;
-  /** Rebuild the plan from current files + edits. */
-  replan: () => Promise<void>;
+  /** Rebuild the plan from current state. Debounced + race-guarded. */
+  replan: () => void;
   /** Mark execution done; flips phase to result. */
   finishExecution: (results: Map<string, boolean>) => void;
 }
+
+let planGeneration = 0;
 
 export const useWorkspace = create<WorkspaceState>((set, get) => ({
   phase: "import",
@@ -67,7 +69,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
         phase: "review",
         scanning: false,
       });
-      await get().replan();
+      get().replan();
     } catch (err) {
       console.error(err);
       set({ error: String(err), scanning: false });
@@ -76,7 +78,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
 
   setOrganize(organize) {
     set({ organize });
-    void get().replan();
+    get().replan();
   },
 
   setSelected(selected) {
@@ -87,7 +89,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
     set((s) => ({
       overrides: { ...s.overrides, [path]: { ...s.overrides[path], ...ovr } },
     }));
-    void get().replan();
+    get().replan();
   },
 
   clearOverride(path) {
@@ -96,7 +98,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
       delete next[path];
       return { overrides: next };
     });
-    void get().replan();
+    get().replan();
   },
 
   setResolution(path, resolution) {
@@ -106,15 +108,17 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
       else next[path] = resolution;
       return { resolutions: next };
     });
-    void get().replan();
+    get().replan();
   },
 
   clearAll() {
+    planGeneration += 1; // invalidate in-flight plans
     set({
       phase: "import",
       root: null,
       files: [],
       plan: null,
+      planning: false,
       overrides: {},
       resolutions: {},
       selected: null,
@@ -123,32 +127,43 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
     });
   },
 
-  async replan() {
-    const { root, files, overrides, resolutions, organize } = get();
-    if (!root || files.length === 0) {
-      set({ plan: null });
-      return;
-    }
+  /** Debounced so fast typing fires one IPC, not one per keystroke.
+   *  Generation counter discards stale responses arriving out of order. */
+  replan() {
+    const gen = ++planGeneration;
+    const run = async () => {
+      const { root, files, overrides, resolutions, organize } = get();
+      if (!root || files.length === 0) {
+        set({ plan: null });
+        return;
+      }
+      try {
+        const plan: RenamePlan = await buildRenamePlan({
+          root,
+          files,
+          organize,
+          overrides,
+          resolutions,
+        });
+        // Stale response? A newer replan started meanwhile — drop it.
+        if (gen !== planGeneration) return;
+        set({ plan, planning: false });
+      } catch (err) {
+        console.error(err);
+        if (gen === planGeneration)
+          set({ error: String(err), planning: false });
+      }
+    };
     set({ planning: true });
-    try {
-      const plan: RenamePlan = await buildRenamePlan({
-        root,
-        files,
-        organize,
-        overrides,
-        resolutions,
-      });
-      set({ plan, planning: false });
-    } catch (err) {
-      console.error(err);
-      set({ error: String(err), planning: false });
-    }
+    setTimeout(() => void run(), PLAN_DEBOUNCE_MS);
   },
 
   finishExecution(results) {
     set({ results, phase: "result" });
   },
 }));
+
+const PLAN_DEBOUNCE_MS = 150;
 
 function parentOf(path: string): string {
   const i = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
@@ -157,9 +172,15 @@ function parentOf(path: string): string {
 
 /** Derived counts for badges and confirmation dialog. */
 export function statusCounts(items: PlanItem[]) {
-  const ready = items.filter((i) => i.status === "ready").length;
-  const needsReview = items.filter((i) => i.status === "needsreview").length;
-  const conflict = items.filter((i) => i.status === "conflict").length;
-  const errors = items.filter((i) => i.status === "error").length;
+  let ready = 0;
+  let needsReview = 0;
+  let conflict = 0;
+  let errors = 0;
+  for (const item of items) {
+    if (item.status === "ready") ready += 1;
+    else if (item.status === "needsreview") needsReview += 1;
+    else if (item.status === "conflict") conflict += 1;
+    else errors += 1;
+  }
   return { ready, needsReview, conflict, errors };
 }

@@ -16,6 +16,17 @@ pub fn tokenize(stem: &str) -> Vec<String> {
         .collect()
 }
 
+/// Persian/Arabic-Indic digits → ASCII. Persian filenames often use ۰۱۲.
+pub fn ascii_digits(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            '۰'..'۹' => char::from_u32('0' as u32 + (c as u32 - '۰' as u32)).unwrap_or(c),
+            '٠'..'٩' => char::from_u32('0' as u32 + (c as u32 - '٠' as u32)).unwrap_or(c),
+            c => c,
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -42,15 +53,11 @@ mod tests {
             vec!["The", "Last", "of", "Us", "S02E03"]
         );
     }
-}
 
-/// Persian/Arabic-Indic digits → ASCII. Persian filenames often use ۰۱۲.
-pub fn ascii_digits(s: &str) -> String {
-    s.chars()
-        .map(|c| match c {
-            '۰'..'۹' => char::from_u32('0' as u32 + (c as u32 - '۰' as u32)).unwrap_or(c),
-            '٠'..'٩' => char::from_u32('0' as u32 + (c as u32 - '٠' as u32)).unwrap_or(c),
-            c => c,
-        })
-        .collect()
+    #[test]
+    fn persian_digits_become_ascii() {
+        assert_eq!(ascii_digits("فصل ۲ قسمت ۱"), "فصل 2 قسمت 1");
+        assert_eq!(ascii_digits("٢٠٢٠"), "2020");
+        assert_eq!(ascii_digits("plain 123"), "plain 123");
+    }
 }

@@ -43,3 +43,14 @@ mod tests {
         );
     }
 }
+
+/// Persian/Arabic-Indic digits → ASCII. Persian filenames often use ۰۱۲.
+pub fn ascii_digits(s: &str) -> String {
+    s.chars()
+        .map(|c| match c {
+            '۰'..'۹' => char::from_u32('0' as u32 + (c as u32 - '۰' as u32)).unwrap_or(c),
+            '٠'..'٩' => char::from_u32('0' as u32 + (c as u32 - '٠' as u32)).unwrap_or(c),
+            c => c,
+        })
+        .collect()
+}

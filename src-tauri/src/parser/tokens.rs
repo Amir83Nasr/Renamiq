@@ -177,7 +177,7 @@ fn adjacent_extra_count(tokens: &[String]) -> usize {
 }
 
 /// Weak patterns only considered when no strong SxxExx exists anywhere:
-/// "1x01", "01x01", "Season 1 Episode 1".
+/// "1x01", "01x01", "Season 1 Episode 1", "فصل ۲ قسمت ۱".
 fn try_sx_ep_at(i: usize, tokens: &[String]) -> Option<EpisodeHit> {
     let t = &tokens[i];
     if let Some(x) = t.find(['x', 'X']) {
@@ -193,22 +193,37 @@ fn try_sx_ep_at(i: usize, tokens: &[String]) -> Option<EpisodeHit> {
         }
         return None;
     }
-    // "Season 1" followed later by "Episode 1"
-    if t.eq_ignore_ascii_case("season") && i + 1 < tokens.len() {
-        let s_tok = &tokens[i + 1];
-        if let Ok(s) = s_tok.parse::<u8>() {
+    // "Season 1 … Episode 2" / "فصل ۲ … قسمت ۱" / Persian order "قسمت ۱ فصل ۲".
+    // Word followed by a number; the paired word+number must appear nearby.
+    if (is_season_word(t) || is_episode_word(t)) && i + 1 < tokens.len() {
+        if let Ok(n1) = tokens[i + 1].parse::<u8>() {
+            let first_is_season = is_season_word(t);
             for j in (i + 2)..tokens.len().min(i + 6) {
-                if tokens[j].eq_ignore_ascii_case("episode") {
-                    if let Some(next) = tokens.get(j + 1) {
-                        if let Ok(e) = next.parse::<u8>() {
-                            return finish_hit(i, s, vec![e], j + 2 - i, t.len(), tokens);
-                        }
-                    }
+                let marker = is_episode_word(&tokens[j]) || is_season_word(&tokens[j]);
+                if !marker {
+                    continue;
+                }
+                if let Some(n2) = tokens.get(j + 1).and_then(|n| n.parse::<u8>().ok()) {
+                    // Season-word-first or episode-word-second → (n1, n2) is
+                    // (season, episode); otherwise the pair is reversed.
+                    let swapped = !first_is_season && is_season_word(&tokens[j]);
+                    let (s, e) = if swapped { (n2, n1) } else { (n1, n2) };
+                    let consumed = j + 2 - i;
+                    return finish_hit(i, s, vec![e], consumed, t.len(), tokens);
                 }
             }
         }
     }
     None
+}
+
+/// Season/episode words, English and Persian ("فصل ۲ قسمت ۱").
+fn is_season_word(t: &str) -> bool {
+    t.eq_ignore_ascii_case("season") || t == "فصل"
+}
+
+fn is_episode_word(t: &str) -> bool {
+    t.eq_ignore_ascii_case("episode") || t.eq_ignore_ascii_case("ep") || t == "قسمت"
 }
 
 /// Index of a plausible release-year token. Requires 1900–2100 and that the

@@ -1,72 +1,78 @@
-import {
-  Captions,
-  Film,
-  FolderTree,
-  History,
-  Settings as SettingsIcon,
-} from "lucide-react";
+// ── APP MAIN COMPONENT ───────────────────────────────────────
+
+import { Activity, Film, Settings as SettingsIcon } from "lucide-react";
 import { useState } from "react";
-import { t } from "@/i18n";
+import { TitleBar } from "@/components/ui/titlebar";
+import { type MessageKey, t } from "@/i18n";
 import { cn } from "@/lib/utils";
 import ActivityPage from "@/pages/ActivityPage";
-import LibraryPage from "@/pages/LibraryPage";
-import OrganizePage from "@/pages/OrganizePage";
 import SettingsPage from "@/pages/SettingsPage";
-import SubtitlesPage from "@/pages/SubtitlesPage";
+import WorkspacePage from "@/pages/WorkspacePage";
 
-const NAV = [
-  { id: "library", icon: Film, label: t("nav.library") },
-  { id: "organize", icon: FolderTree, label: t("nav.organize") },
-  { id: "subtitles", icon: Captions, label: t("nav.subtitles") },
-  { id: "activity", icon: History, label: t("nav.activity") },
-  { id: "settings", icon: SettingsIcon, label: t("nav.settings") },
-] as const;
+type PageId = "workspace" | "activity" | "settings";
 
-type PageId = (typeof NAV)[number]["id"];
+const NAV: { id: PageId; icon: typeof Film; labelKey: MessageKey }[] = [
+  { id: "workspace", icon: Film, labelKey: "nav.workspace" },
+  { id: "activity", icon: Activity, labelKey: "nav.activity" },
+  { id: "settings", icon: SettingsIcon, labelKey: "nav.settings" },
+];
 
 export default function App() {
-  const [page, setPage] = useState<PageId>("library");
+  const [page, setPage] = useState<PageId>("workspace");
 
   return (
-    <div className="flex h-screen">
-      <nav className="flex w-48 shrink-0 flex-col border-r bg-card px-2 py-4">
-        <div className="mb-6 flex items-center gap-2 px-3">
-          <span className="text-base font-semibold tracking-tight">
-            {t("app.title")}
-          </span>
-        </div>
-        <ul className="space-y-1">
-          {NAV.map(({ id, icon: Icon, label }) => (
-            <li key={id}>
-              <button
-                type="button"
-                onClick={() => setPage(id)}
-                aria-current={page === id ? "page" : undefined}
-                className={cn(
-                  "flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
-                  page === id
-                    ? "bg-accent font-medium text-foreground"
-                    : "text-muted-foreground hover:bg-accent/50 hover:text-foreground",
-                )}
-              >
-                <Icon className="size-4" />
-                {label}
-              </button>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-auto px-3 text-[11px] leading-tight text-muted-foreground/60">
-          {t("app.tagline")}
-        </p>
-      </nav>
+    <div className="flex h-screen flex-col overflow-hidden rounded-4xl bg-background">
+      <TitleBar />
+      <div className="flex min-h-0 flex-1 flex-row-reverse">
+        {/* Sidebar sits on the RIGHT in RTL; flex-row-reverse + dir=rtl keeps
+            it at the visual start edge. */}
+        <nav className="flex w-48 shrink-0 select-none flex-col border-s border-border/40 bg-background/40 px-2.5 py-3 backdrop-blur-2xl">
+          <div className="mb-3 flex items-center gap-2 px-2 pt-1">
+            <span className="text-sm font-bold">{t("app.title")}</span>
+          </div>
 
-      <main className="min-w-0 flex-1 overflow-hidden">
-        {page === "library" && <LibraryPage />}
-        {page === "organize" && <OrganizePage />}
-        {page === "subtitles" && <SubtitlesPage />}
-        {page === "activity" && <ActivityPage />}
-        {page === "settings" && <SettingsPage />}
-      </main>
+          <ul className="flex-1 space-y-0.5">
+            {NAV.map(({ id, icon: Icon, labelKey }) => {
+              const active = page === id;
+              return (
+                <li key={id}>
+                  <button
+                    type="button"
+                    onClick={() => setPage(id)}
+                    aria-current={active ? "page" : undefined}
+                    className={cn(
+                      "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
+                      active
+                        ? "bg-accent font-semibold text-accent-foreground shadow-2xs"
+                        : "text-foreground/80 hover:bg-accent/50 hover:text-foreground",
+                    )}
+                  >
+                    <Icon
+                      className={cn(
+                        "size-4",
+                        active ? "text-primary" : "text-muted-foreground",
+                      )}
+                    />
+                    <span>{t(labelKey)}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+
+          <div className="mt-auto border-t border-border/40 px-2 pt-2.5">
+            <p className="text-[10px] leading-tight text-muted-foreground/60">
+              {t("app.tagline")}
+            </p>
+          </div>
+        </nav>
+
+        <main className="min-w-0 flex-1 overflow-hidden bg-background">
+          {page === "workspace" && <WorkspacePage />}
+          {page === "activity" && <ActivityPage />}
+          {page === "settings" && <SettingsPage />}
+        </main>
+      </div>
     </div>
   );
 }

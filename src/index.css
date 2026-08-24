@@ -3,6 +3,32 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ── FONT ─────────────────────────────────────────────────── */
+@font-face {
+  font-family: "IRANYekanX";
+  src: url("/IRANYekanXFaNum-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IRANYekanX";
+  src: url("/IRANYekanXFaNum-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IRANYekanX";
+  src: url("/IRANYekanXFaNum-DemiBold.woff2") format("woff2");
+  font-weight: 600;
+  font-display: swap;
+}
+@font-face {
+  font-family: "IRANYekanX";
+  src: url("/IRANYekanXFaNum-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+
 :root {
   --background: oklch(0.985 0.002 247.839);
   --foreground: oklch(0.208 0.042 265.755);
@@ -25,7 +51,7 @@
   --border: oklch(0.929 0.013 255.508);
   --input: oklch(0.929 0.013 255.508);
   --ring: oklch(0.546 0.245 262.881);
-  --radius: 0.5rem;
+  --radius: 0.625rem;
 }
 
 .dark {
@@ -84,11 +110,13 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html,
   body {
-    @apply bg-background text-foreground;
-    font-family:
-      ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
-      "Vazirmatn", sans-serif;
+    background: transparent;
+  }
+  body {
+    @apply text-foreground;
+    font-family: "IRANYekanX", ui-sans-serif, system-ui, sans-serif;
     user-select: none;
     overflow: hidden;
   }

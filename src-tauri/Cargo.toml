@@ -26,4 +26,5 @@ tauri-plugin-dialog = "2.7.2"
 tauri-plugin-fs = "2.5.1"
 rusqlite = { version = "0.40.2", features = ["bundled"] }
 thiserror = "2"
+window-vibrancy = "0.5"
 

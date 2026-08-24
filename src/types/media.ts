@@ -41,34 +41,58 @@ export interface ScanResult {
   durationMs: number;
 }
 
-/** A rename/move operation proposed by the planner. */
-export type OperationType = "rename" | "move";
+/** Per-file status computed at plan time. */
+export type ItemStatus = "ready" | "needsreview" | "error" | "conflict";
 
-export interface PlannedOp {
-  id: string;
-  kind: OperationType;
-  source: string;
-  destination: string;
-  /** Destination already exists on disk (needs user decision). */
-  collidesOnDisk: boolean;
-  /** Another planned op targets the same destination. */
-  duplicateInPlan: boolean;
+/** How the user resolves an on-disk destination collision. */
+export type ConflictResolution = "skip" | "replace" | "suffix";
+
+/** User override for one file; null fields fall back to parsed values. */
+export interface FileOverride {
+  kind?: MediaKind;
+  title?: string;
+  year?: number;
+  season?: number;
+  episode?: number;
+  customName?: string;
+  exclude?: boolean;
 }
 
-export interface SkippedFile {
+/** One file in the rename plan. */
+export interface PlanItem {
   path: string;
-  reason: string;
+  originalName: string;
+  newName: string;
+  directory: string;
+  destination: string;
+  kind: MediaKind;
+  season: number | null;
+  episode: number | null;
+  year: number | null;
+  status: ItemStatus;
+  /** Machine-readable reason codes ("notitle", "noyear", "nosxe", "unsure",
+   *  "empty", "notype", "exists", "duplicate", "replace"). */
+  warnings: string[];
+}
+
+export interface PlanRequest {
+  root: string;
+  files: ScannedFile[];
+  organize: boolean;
+  overrides: Record<string, FileOverride>;
+  resolutions: Record<string, ConflictResolution>;
 }
 
 export interface RenamePlan {
-  root: string;
-  ops: PlannedOp[];
-  skipped: SkippedFile[];
+  items: PlanItem[];
+  readyCount: number;
 }
 
 export interface OpResult {
-  id: string;
+  path: string;
   ok: boolean;
+  /** Actual destination on success (may differ after suffix resolution). */
+  destination: string | null;
   error: string | null;
 }
 

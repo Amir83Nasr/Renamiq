@@ -5,7 +5,7 @@ mod tokens;
 
 use serde::{Deserialize, Serialize};
 
-use normalize::{split_stem_and_ext, tokenize};
+use normalize::{ascii_digits, split_stem_and_ext, tokenize};
 
 /// Parsed metadata extracted from a media filename.
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -64,7 +64,8 @@ impl ParsedMedia {
 /// pattern → TV; standalone year → movie), split title from noise at that
 /// marker, then classify remaining trailing tokens.
 pub fn parse_filename(raw: &str) -> ParsedMedia {
-    let (stem, _ext) = split_stem_and_ext(raw);
+    let raw = ascii_digits(raw);
+    let (stem, _ext) = split_stem_and_ext(&raw);
     let tokens = tokenize(stem);
 
     if let Some(hit) = tokens::find_episode_marker(&tokens) {
@@ -214,12 +215,13 @@ fn capitalize(s: &str) -> String {
     }
 }
 
-/// Join title tokens with spaces and clean punctuation edges.
+/// Join title tokens with spaces and clean punctuation edges. Hyphen-joined
+/// scene titles ("Jack-Reaper") become spaces; standalone dashes vanish.
 fn join_title(tokens: &[String]) -> String {
-    let joined = tokens.join(" ");
-    joined
-        .trim_matches(['-', '.', '_', ' '])
-        .split_whitespace()
+    tokens
+        .iter()
+        .flat_map(|t| t.split('-'))
+        .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join(" ")
 }
@@ -323,5 +325,19 @@ mod tests {
         let p = parse_filename("x264_final_render_export");
         assert_eq!(p.kind, MediaKind::Unknown);
         assert!(p.low_confidence);
+    }
+
+    #[test]
+    fn persian_digits_parsed() {
+        let p = parse_filename("قسمت.۰۱.فصل.۰۲.mkv");
+        assert_eq!(p.season, Some(2));
+        assert_eq!(p.episode, Some(1));
+    }
+
+    #[test]
+    fn hyphen_title_joined() {
+        let p = parse_filename("Jack-Reaper.2020.1080p.WEB-DL.mkv");
+        assert_eq!(p.title, "Jack Reaper");
+        assert_eq!(p.year, Some(2020));
     }
 }

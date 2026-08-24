@@ -50,6 +50,71 @@ fn role_for(ext: &str) -> FileRole {
     }
 }
 
+/// Scan a mix of file and folder paths. Files are added directly (if
+/// video/subtitle), folders scanned recursively like [`scan_directory`].
+/// `root` is the deepest shared parent so the planner can still organize
+/// relative to a common base; falls back to the first path's parent.
+pub fn scan_paths(paths: &[PathBuf]) -> std::io::Result<ScanResult> {
+    let start = std::time::Instant::now();
+    let mut files = Vec::new();
+    for path in paths {
+        if path.is_dir() {
+            scan_recursive(path, &mut files, 0)?;
+        } else if let Some(file) = scan_file(path)? {
+            files.push(file);
+        }
+    }
+    let root = paths
+        .first()
+        .and_then(|p| p.parent())
+        .map(Path::to_path_buf)
+        .unwrap_or_default();
+    Ok(ScanResult {
+        root,
+        duration_ms: start.elapsed().as_millis() as u64,
+        files,
+    })
+}
+
+/// Build a `ScannedFile` for a single loose file. Returns `None` when the
+/// role is `Other` or metadata is unavailable — same filtering as directory
+/// scans.
+fn scan_file(path: &Path) -> std::io::Result<Option<ScannedFile>> {
+    let Some(name) = path.file_name().map(|n| n.to_string_lossy().into_owned()) else {
+        return Ok(None);
+    };
+    if is_hidden(&name) {
+        return Ok(None);
+    }
+    let ext = path
+        .extension()
+        .map(|e| format!(".{}", e.to_string_lossy().to_lowercase()))
+        .unwrap_or_default();
+    let role = role_for(&ext);
+    if role == FileRole::Other {
+        return Ok(None);
+    }
+    let parsed = match role {
+        FileRole::Video => Some(parse_filename(&name)),
+        FileRole::Subtitle | FileRole::Other => None,
+    };
+    let subtitle_language = if role == FileRole::Subtitle {
+        extract_subtitle_language(&name)
+    } else {
+        None
+    };
+    let size_bytes = path.metadata().map(|m| m.len()).unwrap_or(0);
+    Ok(Some(ScannedFile {
+        path: path.to_path_buf(),
+        name,
+        extension: ext,
+        size_bytes,
+        role,
+        parsed,
+        subtitle_language,
+    }))
+}
+
 /// Recursively scan `root` for media and subtitle files.
 /// Skips hidden entries (dot-prefixed) and common junk dirs; unreadable
 /// subdirs are skipped with a stderr note rather than failing the scan.

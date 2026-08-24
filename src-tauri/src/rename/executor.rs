@@ -1,104 +1,114 @@
-//! Plan execution + undo journal. Each executed op is recorded so it can be
-//! reversed (rename/move are reversible by swapping source/destination).
+//! Plan execution + undo journal. Each executed op is recorded with its
+//! ACTUAL destination so reversal is exact even after suffix/replace.
 
 use std::fs;
+use std::path::PathBuf;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::core::error::{AppResult, RenamiqError};
-use crate::rename::planner::PlannedOp;
+use crate::rename::planner::{ConflictResolution, PlanItem};
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpResult {
-    pub id: String,
+    pub path: PathBuf,
     pub ok: bool,
+    /// Actual destination on success (may differ after suffix resolution).
+    pub destination: Option<PathBuf>,
     pub error: Option<String>,
 }
 
-/// Execute planned ops sequentially. Ops flagged as collisions are skipped
-/// unless `resolve` says otherwise (caller decides Skip/Replace per file).
-/// Never overwrites silently: without a resolve callback collisions fail.
-pub fn execute_plan(ops: &[PlannedOp], overwrite_ids: &[String]) -> AppResult<Vec<OpResult>> {
-    let mut results = Vec::with_capacity(ops.len());
-    for op in ops {
-        if op.collides_on_disk && !overwrite_ids.contains(&op.id) {
-            results.push(OpResult {
-                id: op.id.clone(),
-                ok: false,
-                error: Some("Destination already exists".into()),
-            });
+/// Execute ready items sequentially. Items whose status is error/conflict
+/// are refused; `replace` items carry an explicit user resolution.
+pub fn execute_plan(
+    items: &[PlanItem],
+    resolutions: &std::collections::HashMap<PathBuf, ConflictResolution>,
+) -> AppResult<Vec<OpResult>> {
+    let mut results = Vec::with_capacity(items.len());
+    for item in items {
+        if item.status == crate::rename::planner::ItemStatus::Error
+            || item.status == crate::rename::planner::ItemStatus::Conflict
+        {
             continue;
         }
-        match apply_op(op) {
-            Ok(()) => results.push(OpResult {
-                id: op.id.clone(),
-                ok: true,
-                error: None,
-            }),
-            Err(err) => results.push(OpResult {
-                id: op.id.clone(),
-                ok: false,
-                error: Some(err.to_string()),
-            }),
-        }
+        let replacing = item.warnings.iter().any(|w| w == "replace")
+            && resolutions.get(&item.path) == Some(&ConflictResolution::Replace);
+        results.push(apply_item(item, replacing));
     }
     Ok(results)
 }
 
-fn apply_op(op: &PlannedOp) -> AppResult<()> {
-    if !op.source.exists() {
-        return Err(RenamiqError::user(format!(
-            "Source file no longer exists: {}",
-            op.source.display()
-        )));
+fn apply_item(item: &PlanItem, replace: bool) -> OpResult {
+    let base = |error: String| OpResult {
+        path: item.path.clone(),
+        ok: false,
+        destination: None,
+        error: Some(error),
+    };
+
+    if !item.source_exists() {
+        return base("The original file could not be found.".into());
     }
-    if let Some(parent) = op.destination.parent() {
-        fs::create_dir_all(parent).map_err(|e| {
-            RenamiqError::with_source(format!("Could not create folder {}", parent.display()), e)
-        })?;
+    if item.destination.exists() && !replace {
+        return base("Destination already exists.".into());
     }
-    // Same-volume rename covers move within one filesystem; fall back to
-    // copy+delete for cross-device moves. Original kept until success by
-    // rename semantics; for copy path the delete happens only after copy OK.
-    if let Err(err) = fs::rename(&op.source, &op.destination) {
-        if err.kind() == std::io::ErrorKind::CrossesDevices {
-            fs::copy(&op.source, &op.destination)
-                .map_err(|e| RenamiqError::with_source("Copy before move failed", e))?;
-            fs::remove_file(&op.source).map_err(|e| {
-                RenamiqError::with_source(
-                    format!(
-                        "Moved but could not remove original {}",
-                        op.source.display()
-                    ),
-                    e,
-                )
-            })?;
-        } else if op.destination.exists() && overwrite_allowed(op) {
-            // Replace only when explicitly requested via overwrite list —
-            // handled above; reaching here means plain failure.
-            return Err(RenamiqError::with_source(
-                format!(
-                    "Unable to rename file. The destination already exists.\nSource: {}\nDestination: {}",
-                    op.source.display(),
-                    op.destination.display()
-                ),
-                err,
-            ));
-        } else {
-            return Err(RenamiqError::with_source(
-                format!(
-                    "Unable to rename file.\nSource: {}\nDestination: {}",
-                    op.source.display(),
-                    op.destination.display()
-                ),
-                err,
-            ));
+    if let Some(parent) = item.destination.parent() {
+        if let Err(err) = fs::create_dir_all(parent) {
+            return base(format!("Could not create folder {}.", parent.display())).with_source(err);
         }
     }
-    Ok(())
+    match fs::rename(&item.path, &item.destination) {
+        Ok(()) => OpResult {
+            path: item.path.clone(),
+            ok: true,
+            destination: Some(item.destination.clone()),
+            error: None,
+        },
+        Err(err) => base("Unable to rename this file.".into()).with_source(err),
+    }
 }
 
-fn overwrite_allowed(_op: &PlannedOp) -> bool {
-    false
+trait SourceCheck {
+    fn source_exists(&self) -> bool;
+}
+impl SourceCheck for PlanItem {
+    fn source_exists(&self) -> bool {
+        self.path.exists()
+    }
+}
+
+trait WithSource {
+    fn with_source(self, err: std::io::Error) -> OpResult;
+}
+impl WithSource for OpResult {
+    fn with_source(mut self, err: std::io::Error) -> OpResult {
+        eprintln!("[renamiq] rename failed: {err}");
+        self.error = Some("Unable to rename this file.".into());
+        self
+    }
+}
+
+/// Journal entry persisted for undo: actual from → to.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct JournalEntry {
+    pub from: PathBuf,
+    pub to: PathBuf,
+}
+
+/// Reverse a journal (newest first). Returns how many files were restored.
+pub fn undo_journal(journal: &[JournalEntry]) -> AppResult<usize> {
+    let mut undone = 0usize;
+    for entry in journal.iter().rev() {
+        if !entry.to.exists() {
+            continue;
+        }
+        if let Some(parent) = entry.from.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        fs::rename(&entry.to, &entry.from)
+            .map_err(|e| RenamiqError::with_source("Could not restore the files.", e))?;
+        undone += 1;
+    }
+    Ok(undone)
 }

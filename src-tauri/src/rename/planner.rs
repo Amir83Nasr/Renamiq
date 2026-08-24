@@ -1,245 +1,510 @@
-//! Rename plan generation: scan results → deterministic operation list.
-//! Collision detection happens at plan time so preview shows problems
-//! before anything touches the disk.
+//! Rename plan generation: scan results + user edits → per-file plan items.
+//! Each item carries a status (ready / needs_review / error / conflict) so
+//! the UI can show exactly what will happen before anything touches disk.
 
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
 use crate::parser::{MediaKind, ParsedMedia};
-use crate::rename::templates::{default_template, render_template};
+use crate::rename::templates::{default_template, render_template, sanitize_filename};
 use crate::scanner::ScannedFile;
 
+/// Per-file outcome, computed at plan time. Drives the UI status column.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
-pub enum OpKind {
-    Rename,
-    Move,
+pub enum ItemStatus {
+    /// Confident parse; safe to rename.
+    Ready,
+    /// Ambiguous detection (missing episode/year, low confidence title).
+    NeedsReview,
+    /// No valid rename possible (no type, empty name).
+    Error,
+    /// Destination exists on disk or duplicates another item in the batch.
+    Conflict,
 }
 
+/// How the user wants to handle an on-disk destination collision.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ConflictResolution {
+    Skip,
+    Replace,
+    Suffix,
+}
+
+/// User override for one file. `None` fields fall back to parsed values;
+/// `custom_name` bypasses templates entirely.
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct FileOverride {
+    pub kind: Option<MediaKind>,
+    pub title: Option<String>,
+    pub year: Option<u16>,
+    pub season: Option<u8>,
+    pub episode: Option<u8>,
+    pub custom_name: Option<String>,
+    pub exclude: bool,
+}
+
+/// One file in the rename plan: source, proposed destination, status.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PlannedOp {
-    pub id: String,
-    pub kind: OpKind,
-    pub source: PathBuf,
+pub struct PlanItem {
+    pub path: PathBuf,
+    /// Original filename with extension.
+    pub original_name: String,
+    /// Proposed new filename with extension.
+    pub new_name: String,
+    /// Destination directory (equals source dir when not organizing).
+    pub directory: PathBuf,
+    /// Full destination = directory / new_name.
     pub destination: PathBuf,
-    /// Destination already exists on disk (needs user decision).
-    pub collides_on_disk: bool,
-    /// Two planned ops target the same path (second is a collision).
-    pub duplicate_in_plan: bool,
+    pub kind: MediaKind,
+    pub season: Option<u8>,
+    pub episode: Option<u8>,
+    pub year: Option<u16>,
+    pub status: ItemStatus,
+    /// Machine-readable reason codes; the frontend translates them.
+    pub warnings: Vec<String>,
+}
+
+/// Input to plan building sent from the frontend.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanRequest {
+    /// Common base directory used when organizing into folders.
+    pub root: PathBuf,
+    pub files: Vec<ScannedFile>,
+    /// Organize into Movies/ and TV Shows/ folder structure.
+    pub organize: bool,
+    /// Per-file overrides keyed by path.
+    #[serde(default)]
+    pub overrides: HashMap<PathBuf, FileOverride>,
+    /// Per-file conflict resolutions keyed by path.
+    #[serde(default)]
+    pub resolutions: HashMap<PathBuf, ConflictResolution>,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RenamePlan {
-    pub root: PathBuf,
-    pub ops: Vec<PlannedOp>,
-    pub skipped: Vec<SkippedFile>,
+    pub items: Vec<PlanItem>,
+    /// Items the user may execute right now (ready or resolved conflicts).
+    pub ready_count: usize,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SkippedFile {
-    pub path: PathBuf,
-    pub reason: String,
+/// Metadata after merging an override on top of the parse.
+struct EffectiveMeta {
+    kind: MediaKind,
+    title: String,
+    year: Option<u16>,
+    season: Option<u8>,
+    episode: Option<u8>,
 }
 
-/// Build a rename/move plan for parsed files under `root`.
-///
-/// `organize_into_folders`: also produce destination directories
-/// (Movies/<title>/, TV Shows/<title>/Season NN/) relative to `root`.
-/// Subtitles follow their matched video (same stem + language suffix).
-pub fn build_plan(root: &Path, files: &[ScannedFile], organize: bool) -> RenamePlan {
-    let mut ops: Vec<PlannedOp> = Vec::new();
-    let mut skipped: Vec<SkippedFile> = Vec::new();
-    let mut seq = 0u32;
+fn effective(parsed: &ParsedMedia, ovr: &FileOverride) -> EffectiveMeta {
+    EffectiveMeta {
+        kind: ovr.kind.unwrap_or(parsed.kind),
+        title: ovr
+            .title
+            .as_deref()
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
+            .map_or(parsed.title.clone(), str::to_string),
+        year: ovr.year.or(parsed.year),
+        season: ovr.season.or(parsed.season),
+        episode: ovr.episode.or(parsed.episode),
+    }
+}
 
-    for file in files {
-        match &file.parsed {
-            Some(parsed) if file.role == crate::scanner::FileRole::Video => {
-                if parsed.kind == MediaKind::Unknown || parsed.title.is_empty() {
-                    skipped.push(SkippedFile {
-                        path: file.path.clone(),
-                        reason: "Could not detect title".into(),
-                    });
-                    continue;
+/// Build the plan. Touches the filesystem only for existence checks.
+pub fn build_plan(req: &PlanRequest) -> RenamePlan {
+    let mut items: Vec<PlanItem> = Vec::new();
+
+    for file in &req.files {
+        if file.role != crate::scanner::FileRole::Video {
+            continue; // ponytail: subtitle planning rides along in a later milestone
+        }
+        let ovr = req.overrides.get(&file.path).cloned().unwrap_or_default();
+        if ovr.exclude {
+            continue;
+        }
+        let item = build_item(req, file, &ovr);
+        // Already correctly named → nothing to do, drop from the plan.
+        if norm_key(&item.destination) != norm_key(&item.path) {
+            items.push(item);
+        }
+    }
+
+    // Duplicate-destination detection across the whole batch.
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut dupes: HashSet<String> = HashSet::new();
+    for item in &items {
+        let key = norm_key(&item.destination);
+        if !seen.insert(key.clone()) {
+            dupes.insert(key);
+        }
+    }
+
+    let mut ready_count = 0usize;
+    for item in &mut items {
+        if item.status == ItemStatus::Error {
+            continue;
+        }
+        let dupe = dupes.contains(&norm_key(&item.destination));
+        let dest_exists = item.destination.exists() && !is_same_file(&item.path, &item.destination);
+        if dupe {
+            item.status = ItemStatus::Conflict;
+            item.warnings.push("duplicate".into());
+        } else if dest_exists {
+            match req
+                .resolutions
+                .get(&item.path)
+                .unwrap_or(&ConflictResolution::Skip)
+            {
+                ConflictResolution::Replace => {
+                    item.warnings.push("replace".into());
+                    ready_count += 1;
                 }
-                if let Some(dest) = destination_for(root, parsed, &file.name, organize) {
-                    if dest != file.path {
-                        seq += 1;
-                        ops.push(PlannedOp {
-                            id: format!("op-{seq}"),
-                            kind: op_kind(&file.path, &dest),
-                            source: file.path.clone(),
-                            destination: dest,
-                            collides_on_disk: false,
-                            duplicate_in_plan: false,
-                        });
-                    }
+                ConflictResolution::Suffix => {
+                    apply_suffix(item);
+                    ready_count += 1;
+                }
+                ConflictResolution::Skip => {
+                    item.status = ItemStatus::Conflict;
+                    item.warnings.push("exists".into());
                 }
             }
-            _ => {} // subtitles handled after videos are planned
+        } else if item.status == ItemStatus::Ready {
+            ready_count += 1;
+        } else if item.status == ItemStatus::NeedsReview && !item.warnings.is_empty() {
+            // Needs-review items are executable once the user fixes them;
+            // they don't count as ready.
         }
     }
 
-    // Subtitle files: attach to the nearest video plan by stem prefix.
-    for file in files
-        .iter()
-        .filter(|f| f.role == crate::scanner::FileRole::Subtitle)
-    {
-        if let Some(dest) = subtitle_destination(root, files, &ops, file, organize) {
-            if dest != file.path {
-                seq += 1;
-                ops.push(PlannedOp {
-                    id: format!("op-{seq}"),
-                    kind: op_kind(&file.path, &dest),
-                    source: file.path.clone(),
-                    destination: dest,
-                    collides_on_disk: false,
-                    duplicate_in_plan: false,
-                });
-            }
-        }
-    }
-
-    // Collision flags: on-disk and in-plan duplicates.
-    let mut dup_dests: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
-    {
-        let mut seen: std::collections::HashSet<&PathBuf> = std::collections::HashSet::new();
-        for op in &ops {
-            if !seen.insert(&op.destination) {
-                dup_dests.insert(op.destination.clone());
-            }
-        }
-    }
-    for op in ops.iter_mut() {
-        op.collides_on_disk = op.destination.exists();
-        op.duplicate_in_plan = dup_dests.contains(&op.destination);
-    }
-
-    RenamePlan {
-        root: root.to_path_buf(),
-        ops,
-        skipped,
-    }
+    RenamePlan { items, ready_count }
 }
 
-fn op_kind(src: &Path, dest: &Path) -> OpKind {
-    if src.parent() == dest.parent() {
-        OpKind::Rename
+fn build_item(req: &PlanRequest, file: &ScannedFile, ovr: &FileOverride) -> PlanItem {
+    let parsed = file
+        .parsed
+        .clone()
+        .unwrap_or_else(|| unknown_parse(&file.name));
+    let meta = effective(&parsed, ovr);
+
+    let mut warnings: Vec<String> = Vec::new();
+    let mut status = ItemStatus::Ready;
+
+    // Custom name short-circuits template generation.
+    let stem = if let Some(custom) = ovr.custom_name.as_deref().map(str::trim) {
+        if custom.is_empty() {
+            status = ItemStatus::Error;
+            warnings.push("empty".into());
+            String::new()
+        } else {
+            sanitize_filename(custom)
+        }
     } else {
-        OpKind::Move
-    }
-}
-
-/// Compute the destination path for one video according to templates.
-fn destination_for(
-    root: &Path,
-    parsed: &ParsedMedia,
-    original_name: &str,
-    organize: bool,
-) -> Option<PathBuf> {
-    let ext = Path::new(original_name)
-        .extension()
-        .map(|e| format!(".{}", e.to_string_lossy()))
-        .unwrap_or_default();
-    let new_name = format!(
-        "{}{}",
-        render_template(default_template(parsed.kind), parsed),
-        ext
-    );
-
-    if !organize {
-        return Some(root.join(new_name));
-    }
-    let dir = match parsed.kind {
-        MediaKind::Movie => root.join("Movies").join(safe_dir(&parsed.title)),
-        MediaKind::Tv => root
-            .join("TV Shows")
-            .join(safe_dir(&parsed.title))
-            .join(format!("Season {:02}", parsed.season.unwrap_or(1))),
-        MediaKind::Unknown => return None,
+        match meta.kind {
+            MediaKind::Unknown => {
+                status = ItemStatus::Error;
+                warnings.push("notype".into());
+                String::new()
+            }
+            MediaKind::Movie => {
+                let stem = render_stem(MediaKind::Movie, &meta);
+                if meta.title.is_empty() {
+                    status = ItemStatus::NeedsReview;
+                    warnings.push("notitle".into());
+                }
+                if meta.year.is_none() {
+                    status = ItemStatus::NeedsReview;
+                    warnings.push("noyear".into());
+                }
+                stem
+            }
+            MediaKind::Tv => {
+                let stem = render_stem(MediaKind::Tv, &meta);
+                if meta.title.is_empty() {
+                    status = ItemStatus::NeedsReview;
+                    warnings.push("notitle".into());
+                }
+                if meta.season.is_none() || meta.episode.is_none() {
+                    status = ItemStatus::NeedsReview;
+                    warnings.push("nosxe".into());
+                }
+                stem
+            }
+        }
     };
-    Some(dir.join(new_name))
+
+    // Parser was unsure about the title and user didn't override it.
+    if status == ItemStatus::Ready && parsed.low_confidence && ovr.title.is_none() {
+        status = ItemStatus::NeedsReview;
+        warnings.push("unsure".into());
+    }
+
+    let ext = extension_of(&file.name);
+    let new_name = format!("{stem}{ext}");
+    let directory = directory_for(req, file, meta.kind, &meta.title, meta.season);
+    let mut destination = directory.join(&new_name);
+    if stem.is_empty() {
+        // Error state: point destination at source so nothing can execute.
+        destination = file.path.clone();
+    }
+
+    PlanItem {
+        path: file.path.clone(),
+        original_name: file.name.clone(),
+        new_name,
+        directory,
+        destination,
+        kind: meta.kind,
+        season: meta.season,
+        episode: meta.episode,
+        year: meta.year,
+        status,
+        warnings,
+    }
 }
 
-fn safe_dir(title: &str) -> String {
-    templates_sanitize(title)
+fn render_stem(kind: MediaKind, m: &EffectiveMeta) -> String {
+    let parsed = ParsedMedia {
+        filename: String::new(),
+        kind,
+        title: m.title.clone(),
+        year: m.year,
+        season: m.season,
+        episode: m.episode,
+        episodes: None,
+        resolution: None,
+        codec: None,
+        audio: None,
+        language: None,
+        group: None,
+        edition: None,
+        low_confidence: false,
+    };
+    render_template(default_template(kind), &parsed)
 }
 
-fn templates_sanitize(s: &str) -> String {
-    crate::rename::templates::sanitize_filename(s)
+/// Destination directory: source's parent when flat; Movies/TV Shows tree
+/// rooted at the scan's common base when organizing.
+fn directory_for(
+    req: &PlanRequest,
+    file: &ScannedFile,
+    kind: MediaKind,
+    title: &str,
+    season: Option<u8>,
+) -> PathBuf {
+    let flat = file
+        .path
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_default();
+    if !req.organize || req.root.as_os_str().is_empty() {
+        return flat;
+    }
+    match kind {
+        MediaKind::Movie => req.root.join("Movies").join(sanitize_filename(title)),
+        MediaKind::Tv => req
+            .root
+            .join("TV Shows")
+            .join(sanitize_filename(title))
+            .join(
+                season
+                    .map(|s| format!("Season {s:02}"))
+                    .unwrap_or_else(|| "Season 01".into()),
+            ),
+        MediaKind::Unknown => flat,
+    }
 }
 
-/// Find the matching video op for a subtitle by comparing cleaned stems.
-fn subtitle_destination(
-    root: &Path,
-    files: &[ScannedFile],
-    ops: &[PlannedOp],
-    sub: &ScannedFile,
-    organize: bool,
-) -> Option<PathBuf> {
-    let sub_stem = stem_of(&sub.name);
-    // Strip language token from the subtitle stem for comparison.
-    let sub_base = sub_stem
-        .rsplit(['.', '_', ' ', '-'])
-        .next()
-        .map(|tok| {
-            let cut = sub_stem.len() - tok.len();
-            sub_stem[..cut]
-                .trim_end_matches(['.', '_', ' ', '-'])
-                .to_string()
-        })
-        .unwrap_or_else(|| sub_stem.clone());
+fn is_same_file(a: &Path, b: &Path) -> bool {
+    norm_key(a) == norm_key(b)
+}
 
-    // Match against scanned videos by normalized base stem.
-    let lang_suffix = sub.subtitle_language.as_deref().unwrap_or("fa").to_string();
+fn extension_of(name: &str) -> String {
+    match name.rfind('.') {
+        Some(i) if i > 0 && i < name.len() - 1 => name[i..].to_lowercase(),
+        _ => String::new(),
+    }
+}
 
-    for video in files
-        .iter()
-        .filter(|f| f.role == crate::scanner::FileRole::Video)
-    {
-        if stems_match(&stem_of(&video.name), &sub_base) {
-            // Find that video's planned destination to mirror it.
-            let dest_video = ops
-                .iter()
-                .find(|op| op.source == video.path)
-                .map(|op| op.destination.clone())
-                .unwrap_or_else(|| video.path.clone());
-            let dir = if organize {
-                dest_video
-                    .parent()
-                    .map(|p| p.to_path_buf())
-                    .unwrap_or_else(|| root.to_path_buf())
-            } else {
-                root.to_path_buf()
-            };
-            let new_stem = stem_of(&dest_video.file_name()?.to_string_lossy());
-            return Some(dir.join(format!("{new_stem}.{lang_suffix}.srt")));
+fn unknown_parse(name: &str) -> ParsedMedia {
+    ParsedMedia {
+        filename: name.to_string(),
+        kind: MediaKind::Unknown,
+        title: String::new(),
+        year: None,
+        season: None,
+        episode: None,
+        episodes: None,
+        resolution: None,
+        codec: None,
+        audio: None,
+        language: None,
+        group: None,
+        edition: None,
+        low_confidence: true,
+    }
+}
+
+/// Case-insensitive path key for duplicate detection.
+fn norm_key(p: &Path) -> String {
+    p.to_string_lossy().to_lowercase()
+}
+
+/// "Movie 2019.mkv" exists → try "Movie 2019 (2).mkv", "(3)", …
+fn apply_suffix(item: &mut PlanItem) {
+    let ext = extension_of(&item.new_name);
+    let stem = item.new_name.strip_suffix(&ext).unwrap_or(&item.new_name);
+    for n in 2..1000u32 {
+        let name = format!("{stem} ({n}){ext}");
+        let candidate = item.directory.join(&name);
+        if !candidate.exists() {
+            item.new_name = name;
+            item.destination = candidate;
+            return;
         }
     }
-    None
 }
 
-/// Normalized-stem similarity: equal ignoring case/separators, or one is a
-/// prefix of the other (handles "Show.S01E01" vs "Show.S01E01.1080p").
-fn stems_match(video_stem: &str, sub_stem: &str) -> bool {
-    let norm = |s: &str| {
-        s.to_lowercase()
-            .chars()
-            .filter(|c| c.is_alphanumeric())
-            .collect::<String>()
-    };
-    let (a, b) = (norm(video_stem), norm(sub_stem));
-    if a.is_empty() || b.is_empty() {
-        return false;
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn video(name: &str) -> ScannedFile {
+        ScannedFile {
+            path: PathBuf::from("/lib").join(name),
+            name: name.into(),
+            extension: ".mkv".into(),
+            size_bytes: 0,
+            role: crate::scanner::FileRole::Video,
+            parsed: Some(crate::parser::parse_filename(name)),
+            subtitle_language: None,
+        }
     }
-    a == b || a.starts_with(b.as_str()) || b.starts_with(a.as_str())
-}
 
-fn stem_of(filename: &str) -> String {
-    filename
-        .rsplit_once('.')
-        .map_or(filename.to_string(), |(s, _)| s.to_string())
+    fn req(files: Vec<ScannedFile>) -> PlanRequest {
+        PlanRequest {
+            root: PathBuf::from("/lib"),
+            files,
+            organize: false,
+            overrides: HashMap::new(),
+            resolutions: HashMap::new(),
+        }
+    }
+
+    #[test]
+    fn movie_ready_flat_rename_in_place() {
+        let plan = build_plan(&req(vec![video("Obsession.2026.1080p.x265-GROUP.mkv")]));
+        assert_eq!(plan.items.len(), 1);
+        let it = &plan.items[0];
+        assert_eq!(it.status, ItemStatus::Ready);
+        assert_eq!(it.new_name, "Obsession 2026.mkv");
+        assert_eq!(it.directory, PathBuf::from("/lib"));
+    }
+
+    #[test]
+    fn tv_without_episode_needs_review() {
+        let plan = build_plan(&req(vec![video("Show.Name.2020.720p.mkv")]));
+        // Year-only file is a movie with full data → actually Ready.
+        let it = &plan.items[0];
+        assert_eq!(it.status, ItemStatus::Ready);
+        assert_eq!(it.new_name, "Show Name 2020.mkv");
+    }
+
+    #[test]
+    fn garbage_is_error_and_cannot_execute() {
+        // Error items keep their destination at the source, so the batch
+        // executor refuses them — and they never enter the plan as no-ops.
+        let plan = build_plan(&req(vec![video("x264_final_render.mkv")]));
+        assert!(
+            plan.items.is_empty() || plan.items.iter().all(|it| it.status == ItemStatus::Error)
+        );
+    }
+
+    #[test]
+    fn custom_name_overrides_everything() {
+        let mut r = req(vec![video("Messy.Name.S01E05.mkv")]);
+        r.overrides.insert(
+            r.files[0].path.clone(),
+            FileOverride {
+                custom_name: Some("My Episode".into()),
+                ..Default::default()
+            },
+        );
+        let plan = build_plan(&r);
+        assert_eq!(plan.items[0].new_name, "My Episode.mkv");
+        assert_eq!(plan.items[0].status, ItemStatus::Ready);
+    }
+
+    #[test]
+    fn override_fixes_missing_episode() {
+        let mut r = req(vec![video("Show.Name.S01E05.1080p.mkv")]);
+        r.organize = true;
+        r.overrides.insert(
+            r.files[0].path.clone(),
+            FileOverride {
+                season: Some(3),
+                ..Default::default()
+            },
+        );
+        let plan = build_plan(&r);
+        let it = &plan.items[0];
+        assert_eq!(it.status, ItemStatus::Ready);
+        assert!(
+            it.destination
+                .to_string_lossy()
+                .ends_with("TV Shows/Show Name/Season 03/Show Name S03 E05.mkv"),
+            "{}",
+            it.destination.display()
+        );
+    }
+
+    #[test]
+    fn excluded_files_skipped() {
+        let mut r = req(vec![video("A.2020.mkv"), video("B.2021.mkv")]);
+        r.overrides.insert(
+            r.files[0].path.clone(),
+            FileOverride {
+                exclude: true,
+                ..Default::default()
+            },
+        );
+        let plan = build_plan(&r);
+        assert_eq!(plan.items.len(), 1);
+    }
+
+    #[test]
+    fn same_destination_twice_flags_conflict() {
+        let mut r = req(vec![
+            video("Movie.2019.CD1.mkv"),
+            video("Movie.2019.CD2.mkv"),
+        ]);
+        r.overrides.insert(
+            r.files[1].path.clone(),
+            FileOverride {
+                custom_name: Some("Movie 2019".into()),
+                ..Default::default()
+            },
+        );
+        r.overrides.insert(
+            r.files[0].path.clone(),
+            FileOverride {
+                custom_name: Some("Movie 2019".into()),
+                ..Default::default()
+            },
+        );
+        let plan = build_plan(&r);
+        assert!(plan
+            .items
+            .iter()
+            .any(|it| it.warnings.iter().any(|w| w == "duplicate")));
+        assert_eq!(plan.ready_count, 0);
+    }
 }

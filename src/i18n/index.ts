@@ -1,37 +1,109 @@
 /**
- * Minimal centralized i18n scaffold. English now; Persian/RTL later.
+ * Centralized i18n. App language is Persian (فارسی) with RTL layout.
  * Add a locale by adding an entry to `dictionaries` and flipping `locale`.
  */
 
 export const dictionaries = {
-  en: {
-    "app.title": "Renamiq",
-    "app.tagline": "Rename smarter. Organize better.",
-    "nav.library": "Library",
-    "nav.organize": "Organize",
-    "nav.subtitles": "Subtitles",
-    "nav.activity": "Activity",
-    "nav.settings": "Settings",
-    "library.empty.title": "No library yet",
-    "library.empty.hint": "Choose a folder to scan for movies and TV shows.",
-    "library.pickFolder": "Pick Folder",
-    "library.scan": "Scan",
-    "library.scanning": "Scanning…",
-    "library.fileCount": "{count} files",
-    "organize.title": "Rename Preview",
-    "organize.apply": "Apply Changes",
-    "organize.cancel": "Cancel",
-    "organize.selected": "{count} selected",
-    "settings.theme.light": "Light",
-    "settings.theme.dark": "Dark",
-    "settings.theme.system": "System",
+  fa: {
+    "app.title": "رنامیق",
+    "app.tagline": "تغییرنام هوشمند، سازمان‌دهی تمیز",
+    "nav.workspace": "فضای کاری",
+    "nav.activity": "فعالیت",
+    "nav.settings": "تنظیمات",
+
+    "workspace.drop.title": "فایل‌ها را اینجا رها کنید",
+    "workspace.drop.or": "یا انتخاب کنید",
+    "workspace.pickFiles": "انتخاب فایل",
+    "workspace.pickFolder": "انتخاب پوشه",
+    "workspace.dropToScan": "رها کنید تا اسکن شود",
+    "workspace.scanning": "در حال اسکن…",
+    "workspace.fileCount": "{count} فایل",
+    "workspace.organizeIntoFolders": "سازمان‌دهی در پوشه‌ها",
+    "workspace.rescan": "اسکن دوباره",
+    "workspace.clear": "پاک کردن",
+
+    "status.ready": "آماده",
+    "status.needsreview": "نیازمند بازبینی",
+    "status.error": "خطا",
+    "status.conflict": "تعارض",
+
+    "warn.notype": "نوع فایل تشخیص داده نشد",
+    "warn.notitle": "عنوان تشخیص داده نشد",
+    "warn.noyear": "سال پیدا نشد",
+    "warn.nosxe": "فصل یا قسمت پیدا نشد",
+    "warn.unsure": "عنوان با اطمینان کم تشخیص داده شد",
+    "warn.empty": "نام خالی است",
+    "warn.exists": "فایلی با همین نام از قبل وجود دارد",
+    "warn.duplicate": "فایل دیگری به همین مقصد اشاره می‌کند",
+    "warn.replace": "جایگزین می‌شود",
+
+    "editor.title": "ویرایش",
+    "editor.field.title": "عنوان",
+    "editor.field.type": "نوع",
+    "editor.type.movie": "فیلم",
+    "editor.type.tv": "سریال",
+    "editor.type.unknown": "نامشخص",
+    "editor.field.year": "سال",
+    "editor.field.season": "فصل",
+    "editor.field.episode": "قسمت",
+    "editor.customName": "نام دلخواه",
+    "editor.customNameHint": "نام نهایی را مستقیم وارد کنید",
+    "editor.exclude": "کنار گذاشتن",
+    "editor.preview": "پیش‌نمایش",
+
+    "confirm.title": "تغییرنام {count} فایل؟",
+    "confirm.description":
+      "با تأیید، نام فایل‌ها روی دیسک تغییر می‌کند. این عمل قابل بازگشت است.",
+    "confirm.ready": "آماده",
+    "confirm.warnings": "هشدار",
+    "confirm.errors": "خطا",
+    "confirm.conflicts": "تعارض",
+    "confirm.cancel": "انصراف",
+    "confirm.rename": "تغییرنام فایل‌ها",
+    "confirm.hasConflicts":
+      "{count} تعارض حل‌نشده وجود دارد؛ فقط موارد آماده اجرا می‌شوند.",
+
+    "result.done": "{ok} فایل تغییرنام یافت",
+    "result.failed": "{failed} مورد ناموفق بود",
+    "result.close": "بستن",
+
+    "resolution.exists": "تعارض:",
+    "resolution.skip": "رد شدن",
+    "resolution.replace": "جایگزینی",
+    "resolution.suffix": "افزودن پسوند",
+
+    "activity.title": "فعالیت",
+    "activity.empty.title": "فعالیتی نیست",
+    "activity.empty.hint":
+      "تغییرنام‌های انجام‌شده همراه با قابلیت بازگشت اینجا نمایش داده می‌شوند.",
+    "activity.undo": "بازگردانی آخرین",
+    "activity.undoing": "در حال بازگردانی…",
+    "activity.refresh": "به‌روزرسانی",
+    "activity.undoable": "قابل بازگشت",
+
+    "settings.appearance": "ظاهر",
+    "settings.appearance.hint": "روشن، تاریک یا هماهنگ با سیستم.",
+    "settings.theme.light": "روشن",
+    "settings.theme.dark": "تاریک",
+    "settings.theme.system": "سیستم",
+    "settings.templates": "الگوهای نام‌گذاری",
+    "settings.templates.hint":
+      "متغیرها: {title} {year} {season} {episode} {resolution} {codec}",
+    "settings.template.movie": "فیلم",
+    "settings.template.tv": "قسمت سریال",
+    "settings.folders": "ساختار پوشه‌ها",
+    "settings.folders.movie": "Movies/<عنوان>/<فایل>",
+    "settings.folders.tv": "TV Shows/<عنوان>/Season NN/<فایل>",
+    "settings.language": "زبان",
+
+    "error.generic": "مشکلی پیش آمد. دوباره تلاش کنید.",
   },
 } as const;
 
 export type Locale = keyof typeof dictionaries;
-export type MessageKey = keyof (typeof dictionaries)["en"];
+export type MessageKey = keyof (typeof dictionaries)["fa"];
 
-let locale: Locale = "en";
+let locale: Locale = "fa";
 
 export function setLocale(next: Locale) {
   locale = next;

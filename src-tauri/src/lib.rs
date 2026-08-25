@@ -1,6 +1,9 @@
 mod commands;
 mod core;
 mod database;
+mod media;
+#[cfg(test)]
+mod subkade_live_test;
 mod parser;
 mod rename;
 mod scanner;
@@ -40,6 +43,10 @@ pub fn run() {
             commands::execute_operations,
             commands::list_operations,
             commands::undo_last_operation,
+            commands::get_settings,
+            commands::set_setting,
+            commands::subkade_search,
+            commands::subkade_download,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

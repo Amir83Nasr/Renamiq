@@ -54,6 +54,8 @@ export interface FileOverride {
   year?: number;
   season?: number;
   episode?: number;
+  /** Subtitle language code override (e.g. "fa"). */
+  language?: string;
   customName?: string;
   exclude?: boolean;
 }
@@ -69,16 +71,28 @@ export interface PlanItem {
   season: number | null;
   episode: number | null;
   year: number | null;
+  /** Canonical subtitle language when this item is a subtitle sidecar. */
+  language: string | null;
+  /** Path of the video this subtitle is attached to (same stem). */
+  videoPath: string | null;
   status: ItemStatus;
   /** Machine-readable reason codes ("notitle", "noyear", "nosxe", "unsure",
    *  "empty", "notype", "exists", "duplicate", "replace"). */
   warnings: string[];
 }
 
+/** User-configurable naming templates (settings page). */
+export interface PlanTemplates {
+  movie: string;
+  tv: string;
+}
+
 export interface PlanRequest {
   root: string;
   files: ScannedFile[];
   organize: boolean;
+  templates?: PlanTemplates | null;
+  includeSubtitles?: boolean;
   overrides: Record<string, FileOverride>;
   resolutions: Record<string, ConflictResolution>;
 }

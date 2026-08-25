@@ -1,13 +1,14 @@
 // ── APP MAIN COMPONENT ───────────────────────────────────────
 
 import { Activity, Film, Settings as SettingsIcon } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { TitleBar } from "@/components/ui/titlebar";
 import { type MessageKey, t } from "@/i18n";
 import { cn } from "@/lib/utils";
 import ActivityPage from "@/pages/ActivityPage";
 import SettingsPage from "@/pages/SettingsPage";
 import WorkspacePage from "@/pages/WorkspacePage";
+import { useWorkspace } from "@/stores/workspace";
 
 type PageId = "workspace" | "activity" | "settings";
 
@@ -19,6 +20,11 @@ const NAV: { id: PageId; icon: typeof Film; labelKey: MessageKey }[] = [
 
 export default function App() {
   const [page, setPage] = useState<PageId>("workspace");
+  const loadSettings = useWorkspace((s) => s.loadSettings);
+
+  useEffect(() => {
+    void loadSettings();
+  }, [loadSettings]);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden rounded-4xl bg-background">

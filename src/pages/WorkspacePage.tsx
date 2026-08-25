@@ -17,7 +17,7 @@ import { Dropzone } from "@/components/workspace/Dropzone";
 import { FileEditor } from "@/components/workspace/FileEditor";
 import { FileList } from "@/components/workspace/FileList";
 import { type MessageKey, t } from "@/i18n";
-import { executeOperations } from "@/lib/tauri";
+import { executeOperations, undoLastOperation } from "@/lib/tauri";
 import { statusCounts, useWorkspace } from "@/stores/workspace";
 
 export default function WorkspacePage() {
@@ -114,8 +114,35 @@ export default function WorkspacePage() {
 /** Execution outcome summary. */
 function ResultView() {
   const { results, clearAll } = useWorkspace();
+  const [undoing, setUndoing] = useState(false);
+  const [undone, setUndone] = useState(false);
   const ok = [...results.values()].filter(Boolean).length;
   const failed = results.size - ok;
+
+  const undo = async () => {
+    setUndoing(true);
+    try {
+      await undoLastOperation();
+      setUndone(true);
+    } catch (err) {
+      console.error(err);
+    }
+    setUndoing(false);
+  };
+
+  if (undone) {
+    return (
+      <div className="flex flex-1 flex-col items-center justify-center gap-6 p-8">
+        <div className="rounded-full bg-muted p-6">
+          <RotateCcw className="size-10 text-muted-foreground" />
+        </div>
+        <p className="text-lg font-bold">{t("result.undone")}</p>
+        <Button variant="outline" onClick={clearAll}>
+          {t("result.close")}
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-6 p-8">
@@ -145,9 +172,18 @@ function ResultView() {
           </li>
         ))}
       </ul>
-      <Button variant="outline" onClick={clearAll}>
-        <RotateCcw /> {t("result.close")}
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          disabled={undoing}
+          onClick={() => void undo()}
+        >
+          <RotateCcw /> {t("result.undo")}
+        </Button>
+        <Button variant="outline" onClick={clearAll}>
+          {t("result.close")}
+        </Button>
+      </div>
     </div>
   );
 }

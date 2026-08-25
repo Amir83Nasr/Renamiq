@@ -3,6 +3,7 @@
 import {
   AlertTriangle,
   Ban,
+  Captions,
   CircleCheck,
   CircleHelp,
   Film,
@@ -108,6 +109,11 @@ function FileRow({
                 <StatusIcon className="size-3" />
                 {t(badge.key)}
               </Badge>
+              {item.language && (
+                <Badge variant="outline" dir="ltr">
+                  {item.language}
+                </Badge>
+              )}
               {item.warnings
                 .filter((w) => w !== "replace")
                 .map((w) => (
@@ -130,12 +136,16 @@ function FileRow({
 }
 
 function KindIcon({ item }: { item: PlanItem }) {
-  const Icon = item.kind === "tv" ? Tv : Film;
+  const Icon = item.language ? Captions : item.kind === "tv" ? Tv : Film;
   return (
     <Icon
       className={cn(
         "mt-0.5 size-4 shrink-0",
-        item.kind === "tv" ? "text-primary" : "text-muted-foreground",
+        item.language
+          ? "text-chart-4"
+          : item.kind === "tv"
+            ? "text-primary"
+            : "text-muted-foreground",
       )}
     />
   );

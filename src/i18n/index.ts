@@ -51,6 +51,18 @@ export const dictionaries = {
     "editor.exclude": "کنار گذاشتن",
     "editor.preview": "پیش‌نمایش",
 
+    "subtitle.language": "زبان زیرنویس",
+    "subtitle.attachedTo": "پیوست به ویدیو",
+    "subtitle.none": "بدون زبان",
+    "warn.orphanSubtitle": "ویدیوی متناظر در لیست نیست؛ جابجا نمی‌شود",
+
+    "subkade.title": "دانلود زیرنویس از سابکده",
+    "subkade.placeholder": "نام فیلم یا سریال…",
+    "subkade.search": "جستجو",
+    "subkade.empty": "نتیجه‌ای پیدا نشد",
+    "subkade.done": "زیرنویس دانلود شد:\n{files}",
+    "subkade.download": "دانلود زیرنویس",
+
     "confirm.title": "تغییرنام {count} فایل؟",
     "confirm.description":
       "با تأیید، نام فایل‌ها روی دیسک تغییر می‌کند. این عمل قابل بازگشت است.",
@@ -65,6 +77,8 @@ export const dictionaries = {
 
     "result.done": "{ok} فایل تغییرنام یافت",
     "result.failed": "{failed} مورد ناموفق بود",
+    "result.undo": "واگرد",
+    "result.undone": "همه تغییرات واگرد شد",
     "result.close": "بستن",
 
     "resolution.exists": "تعارض:",

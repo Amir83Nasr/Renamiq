@@ -1,5 +1,6 @@
 //! Tauri command layer: thin wrappers — no business logic here.
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -169,4 +170,56 @@ pub fn undo_last_operation(db: State<'_, Db>) -> AppResult<String> {
     )
     .map_err(|e| RenamiqError::with_source("Could not update history", e))?;
     Ok(format!("Restored {restored} file(s)"))
+}
+
+// ── SETTINGS (key/value) ─────────────────────────────────────
+
+#[tauri::command]
+pub fn get_settings(db: State<'_, Db>) -> AppResult<HashMap<String, String>> {
+    let conn =
+        db.0.lock()
+            .map_err(|_| RenamiqError::user("Database busy"))?;
+    let mut stmt = conn
+        .prepare("SELECT key, value FROM settings")
+        .map_err(|e| RenamiqError::with_source("Could not read settings", e))?;
+    let rows = stmt
+        .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+        .map_err(|e| RenamiqError::with_source("Could not read settings", e))?;
+    Ok(rows.filter_map(Result::ok).collect())
+}
+
+/// Upsert one setting. Values are plain strings; the frontend owns schemas.
+#[tauri::command]
+pub fn set_setting(
+    key: String,
+    value: String,
+    db: State<'_, Db>,
+) -> AppResult<()> {
+    if key.is_empty() {
+        return Err(RenamiqError::user("Setting key is empty"));
+    }
+    let conn =
+        db.0.lock()
+            .map_err(|_| RenamiqError::user("Database busy"))?;
+    conn.execute(
+        "INSERT INTO settings (key, value) VALUES (?1, ?2)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        rusqlite::params![key, value],
+    )
+    .map_err(|e| RenamiqError::with_source("Could not save setting", e))?;
+    Ok(())
+}
+
+// ── SUBKADE (SUBTITLE DOWNLOAD) ──────────────────────────────
+
+#[tauri::command]
+pub fn subkade_search(query: String, limit: Option<u8>) -> AppResult<Vec<crate::media::subkade::SubkadeResult>> {
+    // Blocking HTTP in a command thread; Tauri spawns commands off the main thread.
+    crate::media::subkade::search(&query, limit.unwrap_or(8))
+}
+
+#[tauri::command]
+pub fn subkade_download(post_url: String, video_path: PathBuf) -> AppResult<Vec<PathBuf>> {
+    let zip = crate::media::subkade::find_zip_link(&post_url)?;
+    crate::media::subkade::download_and_extract(&zip, &video_path)
 }

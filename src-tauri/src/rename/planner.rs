@@ -44,6 +44,8 @@ pub struct FileOverride {
     pub year: Option<u16>,
     pub season: Option<u8>,
     pub episode: Option<u8>,
+    /// Subtitle language code override (e.g. "fa").
+    pub language: Option<String>,
     pub custom_name: Option<String>,
     pub exclude: bool,
 }
@@ -65,6 +67,10 @@ pub struct PlanItem {
     pub season: Option<u8>,
     pub episode: Option<u8>,
     pub year: Option<u16>,
+    /// Canonical subtitle language when this item is a subtitle sidecar.
+    pub language: Option<String>,
+    /// Path of the video this subtitle is attached to (same stem).
+    pub video_path: Option<PathBuf>,
     pub status: ItemStatus,
     /// Machine-readable reason codes; the frontend translates them.
     pub warnings: Vec<String>,
@@ -79,6 +85,12 @@ pub struct PlanRequest {
     pub files: Vec<ScannedFile>,
     /// Organize into Movies/ and TV Shows/ folder structure.
     pub organize: bool,
+    /// Custom naming templates; missing/empty falls back to defaults.
+    #[serde(default)]
+    pub templates: Option<PlanTemplates>,
+    /// Move subtitles alongside their video when organizing (default true).
+    #[serde(default)]
+    pub include_subtitles: Option<bool>,
     /// Per-file overrides keyed by path.
     #[serde(default)]
     pub overrides: HashMap<PathBuf, FileOverride>,
@@ -93,6 +105,23 @@ pub struct RenamePlan {
     pub items: Vec<PlanItem>,
     /// Items the user may execute right now (ready or resolved conflicts).
     pub ready_count: usize,
+}
+
+/// User-configurable naming templates (settings page).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct PlanTemplates {
+    pub movie: String,
+    pub tv: String,
+}
+
+impl Default for PlanTemplates {
+    fn default() -> Self {
+        Self {
+            movie: default_template(MediaKind::Movie).to_string(),
+            tv: default_template(MediaKind::Tv).to_string(),
+        }
+    }
 }
 
 /// Metadata after merging an override on top of the parse.
@@ -122,11 +151,14 @@ fn effective(parsed: &ParsedMedia, ovr: &FileOverride) -> EffectiveMeta {
 /// Build the plan. Touches the filesystem only for existence checks.
 pub fn build_plan(req: &PlanRequest) -> RenamePlan {
     let mut items: Vec<PlanItem> = Vec::new();
+    let videos: Vec<ScannedFile> = req
+        .files
+        .iter()
+        .filter(|f| f.role == crate::scanner::FileRole::Video)
+        .cloned()
+        .collect();
 
-    for file in &req.files {
-        if file.role != crate::scanner::FileRole::Video {
-            continue; // ponytail: subtitle planning rides along in a later milestone
-        }
+    for file in &videos {
         let ovr = req.overrides.get(&file.path).cloned().unwrap_or_default();
         if ovr.exclude {
             continue;
@@ -138,6 +170,11 @@ pub fn build_plan(req: &PlanRequest) -> RenamePlan {
         }
     }
 
+    // ponytail: includeSubtitles=false only skips the rename pass; files
+    // still ride along when organizing moves their host video later.
+    if req.include_subtitles.unwrap_or(true) {
+        plan_subtitles(req, &videos, &mut items);
+    }
     // Duplicate-destination detection across the whole batch.
     let mut seen: HashSet<String> = HashSet::new();
     let mut dupes: HashSet<String> = HashSet::new();
@@ -215,7 +252,7 @@ fn build_item(req: &PlanRequest, file: &ScannedFile, ovr: &FileOverride) -> Plan
                 String::new()
             }
             MediaKind::Movie => {
-                let stem = render_stem(MediaKind::Movie, &meta);
+                let stem = render_stem(MediaKind::Movie, &meta, req.templates.as_ref());
                 if meta.title.is_empty() {
                     status = ItemStatus::NeedsReview;
                     warnings.push("notitle".into());
@@ -227,7 +264,7 @@ fn build_item(req: &PlanRequest, file: &ScannedFile, ovr: &FileOverride) -> Plan
                 stem
             }
             MediaKind::Tv => {
-                let stem = render_stem(MediaKind::Tv, &meta);
+                let stem = render_stem(MediaKind::Tv, &meta, req.templates.as_ref());
                 if meta.title.is_empty() {
                     status = ItemStatus::NeedsReview;
                     warnings.push("notitle".into());
@@ -263,6 +300,8 @@ fn build_item(req: &PlanRequest, file: &ScannedFile, ovr: &FileOverride) -> Plan
         directory,
         destination,
         kind: meta.kind,
+        language: None,
+        video_path: None,
         season: meta.season,
         episode: meta.episode,
         year: meta.year,
@@ -271,7 +310,128 @@ fn build_item(req: &PlanRequest, file: &ScannedFile, ovr: &FileOverride) -> Plan
     }
 }
 
-fn render_stem(kind: MediaKind, m: &EffectiveMeta) -> String {
+/// Second pass: attach subtitle sidecars to their videos. A subtitle joins
+/// the same-dir video sharing the most leading filename tokens ("Movie.fa"
+/// ↔ "Movie.2026"); its new name is `<video stem>[.<lang>]<ext>` beside the
+/// video's planned destination.
+fn plan_subtitles(req: &PlanRequest, videos: &[ScannedFile], items: &mut Vec<PlanItem>) {
+    use crate::scanner::FileRole;
+
+    struct Host {
+        stem: String, // new-name stem without extension
+        directory: PathBuf,
+        season: Option<u8>,
+        episode: Option<u8>,
+        year: Option<u16>,
+    }
+    // Owned table (no refs into `items`, which we mutate below).
+    let hosts: HashMap<String, Host> = items
+        .iter()
+        .map(|it| {
+            (
+                norm_key(&it.path),
+                Host {
+                    stem: it
+                        .new_name
+                        .rsplit_once('.')
+                        .map_or(it.new_name.clone(), |(s, _)| s.to_string()),
+                    directory: it.directory.clone(),
+                    season: it.season,
+                    episode: it.episode,
+                    year: it.year,
+                },
+            )
+        })
+        .collect();
+
+    for file in &req.files {
+        if file.role != FileRole::Subtitle {
+            continue;
+        }
+        let ovr = req.overrides.get(&file.path).cloned().unwrap_or_default();
+        if ovr.exclude {
+            continue;
+        }
+
+        let Some(video) = find_host_video(file, videos) else {
+            continue; // no matching video in this batch → leave alone
+        };
+        let Some(host) = hosts.get(&norm_key(&video.path)) else {
+            continue;
+        };
+
+        let language = ovr
+            .language
+            .clone()
+            .or_else(|| file.subtitle_language.clone());
+        let ext = extension_of(&file.name);
+        let new_name = match &language {
+            Some(lang) => format!("{}.{}{}", host.stem, lang, ext),
+            None => format!("{}{}", host.stem, ext),
+        };
+        let destination = host.directory.join(&new_name);
+
+        // Already correctly named → nothing to do.
+        if is_same_file(&destination, &file.path) {
+            continue;
+        }
+
+        items.push(PlanItem {
+            path: file.path.clone(),
+            original_name: file.name.clone(),
+            language,
+            video_path: Some(video.path.clone()),
+            new_name,
+            directory: host.directory.clone(),
+            destination,
+            kind: MediaKind::Unknown, // sidecar row, not a video kind
+            season: host.season,
+            episode: host.episode,
+            year: host.year,
+            status: ItemStatus::Ready,
+            warnings: Vec::new(),
+        });
+    }
+}
+
+/// Find the scanned video a subtitle belongs to: same parent dir, longest
+/// run of equal LEADING separator-tokens wins ("Breaking.Bad.S01E01.fa" →
+/// "Breaking.Bad.S01E01.1080p.mkv", 3 tokens).
+fn find_host_video<'a>(sub: &ScannedFile, videos: &'a [ScannedFile]) -> Option<&'a ScannedFile> {
+    let sub_dir = sub.path.parent()?;
+    let sub_tokens: Vec<String> = stem_of(&sub.name)
+        .split(['.', '_', ' ', '-'])
+        .filter(|t| !t.is_empty())
+        .map(str::to_string)
+        .collect();
+    let mut best: Option<(usize, &ScannedFile)> = None;
+    for v in videos {
+        if v.path.parent() != Some(sub_dir) {
+            continue;
+        }
+        let v_stem = stem_of(&v.name);
+        let v_tokens: Vec<&str> = v_stem
+            .split(['.', '_', ' ', '-'])
+            .filter(|t| !t.is_empty())
+            .collect();
+        let common = sub_tokens
+            .iter()
+            .zip(v_tokens.iter())
+            .take_while(|(a, b)| a.eq_ignore_ascii_case(b))
+            .count();
+        if common > 0 && best.is_none_or(|(n, _)| common > n) {
+            best = Some((common, v));
+        }
+    }
+    best.map(|(_, v)| v)
+}
+
+fn stem_of(name: &str) -> String {
+    name.rsplit_once('.')
+        .map_or(name.to_string(), |(s, _)| s.to_string())
+}
+
+fn render_stem(kind: MediaKind, m: &EffectiveMeta, tpl: Option<&PlanTemplates>) -> String {
     let parsed = ParsedMedia {
         filename: String::new(),
         kind,
@@ -288,7 +448,24 @@ fn render_stem(kind: MediaKind, m: &EffectiveMeta) -> String {
         edition: None,
         low_confidence: false,
     };
-    render_template(default_template(kind), &parsed)
+    let default = PlanTemplates::default();
+    let t = match kind {
+        MediaKind::Movie => tpl.map_or(default.movie.as_str(), |t| {
+            if t.movie.trim().is_empty() {
+                default.movie.as_str()
+            } else {
+                t.movie.as_str()
+            }
+        }),
+        _ => tpl.map_or(default.tv.as_str(), |t| {
+            if t.tv.trim().is_empty() {
+                default.tv.as_str()
+            } else {
+                t.tv.as_str()
+            }
+        }),
+    };
+    render_template(t, &parsed)
 }
 
 /// Destination directory: source's parent when flat; Movies/TV Shows tree

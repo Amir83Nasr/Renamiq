@@ -1,9 +1,11 @@
 // ── SETTINGS ─────────────────────────────────────────────────
 
+import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { type Theme, useTheme } from "@/hooks/useTheme";
 import { t } from "@/i18n";
+import { getSettings, setSetting } from "@/lib/tauri";
 
 const THEME_OPTIONS: { value: Theme; labelKey: Parameters<typeof t>[0] }[] = [
   { value: "light", labelKey: "settings.theme.light" },
@@ -11,8 +13,34 @@ const THEME_OPTIONS: { value: Theme; labelKey: Parameters<typeof t>[0] }[] = [
   { value: "system", labelKey: "settings.theme.system" },
 ];
 
+const DEFAULT_MOVIE_TPL = "{title} {year}";
+const DEFAULT_TV_TPL = "{title} S{season:02} E{episode:02}";
+
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
+
+  // Templates: loaded once, edited locally, saved on blur.
+  const [movieTpl, setMovieTpl] = useState(DEFAULT_MOVIE_TPL);
+  const [tvTpl, setTvTpl] = useState(DEFAULT_TV_TPL);
+
+  useEffect(() => {
+    let alive = true;
+    getSettings()
+      .then((s) => {
+        if (!alive) return;
+        setMovieTpl(s["templates.movie"] || DEFAULT_MOVIE_TPL);
+        setTvTpl(s["templates.tv"] || DEFAULT_TV_TPL);
+      })
+      .catch(console.error);
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // ponytail: save-on-blur instead of live; a "saved" toast lands when
+  // settings feedback becomes a priority.
+  const saveTemplate = (key: string, value: string) =>
+    void setSetting(key, value).catch(console.error);
 
   return (
     <div className="mx-auto h-full w-full max-w-xl space-y-4 overflow-y-auto p-6">
@@ -52,13 +80,17 @@ export default function SettingsPage() {
             {"{title} {year} {season} {episode} {resolution} {codec}"}
           </p>
         </div>
-        {/* ponytail: read-only until settings persistence lands; templates
-            become editable inputs wired to the settings table. */}
         <div className="space-y-1.5">
           <Label htmlFor="tpl-movie" dir="ltr">
             {t("settings.template.movie")}
           </Label>
-          <Input id="tpl-movie" dir="ltr" value="{title} {year}" readOnly />
+          <Input
+            id="tpl-movie"
+            dir="ltr"
+            value={movieTpl}
+            onChange={(e) => setMovieTpl(e.target.value)}
+            onBlur={() => saveTemplate("templates.movie", movieTpl.trim())}
+          />
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="tpl-tv" dir="ltr">
@@ -67,8 +99,9 @@ export default function SettingsPage() {
           <Input
             id="tpl-tv"
             dir="ltr"
-            value="{title} S{season:02} E{episode:02}"
-            readOnly
+            value={tvTpl}
+            onChange={(e) => setTvTpl(e.target.value)}
+            onBlur={() => saveTemplate("templates.tv", tvTpl.trim())}
           />
         </div>
       </section>

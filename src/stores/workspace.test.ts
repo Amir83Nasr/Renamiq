@@ -13,6 +13,8 @@ function item(status: PlanItem["status"]): PlanItem {
     season: null,
     episode: null,
     year: 2020,
+    language: null,
+    videoPath: null,
     status,
     warnings: [],
   };

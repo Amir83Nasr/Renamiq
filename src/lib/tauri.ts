@@ -42,6 +42,35 @@ export async function undoLastOperation(): Promise<string> {
   return invoke("undo_last_operation");
 }
 
+export async function getSettings(): Promise<Record<string, string>> {
+  return invoke("get_settings");
+}
+
+export async function setSetting(key: string, value: string): Promise<void> {
+  return invoke("set_setting", { key, value });
+}
+
+export interface SubkadeResult {
+  postId: number;
+  title: string;
+  url: string;
+}
+
+export async function subkadeSearch(
+  query: string,
+  limit = 8,
+): Promise<SubkadeResult[]> {
+  return invoke("subkade_search", { query, limit });
+}
+
+/** Downloads the zip and extracts subtitles next to videoPath. */
+export async function subkadeDownload(
+  postUrl: string,
+  videoPath: string,
+): Promise<string[]> {
+  return invoke("subkade_download", { postUrl, videoPath });
+}
+
 /** Record keys are file paths; the Rust side expects a PathBuf-keyed map. */
 function toPathKeyedMap(resolutions: Record<string, ConflictResolution>) {
   return resolutions;

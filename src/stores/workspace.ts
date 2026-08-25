@@ -1,11 +1,17 @@
 /** Workspace state: import → analyze → edit → plan → confirm → result. */
 
 import { create } from "zustand";
-import { buildRenamePlan, scanFolder, scanPaths } from "@/lib/tauri";
+import {
+  buildRenamePlan,
+  getSettings,
+  scanFolder,
+  scanPaths,
+} from "@/lib/tauri";
 import type {
   ConflictResolution,
   FileOverride,
   PlanItem,
+  PlanTemplates,
   RenamePlan,
   ScannedFile,
   ScanResult,
@@ -23,9 +29,14 @@ interface WorkspaceState {
   overrides: Record<string, FileOverride>;
   resolutions: Record<string, ConflictResolution>;
   organize: boolean;
+  /** Naming templates loaded from settings; null = backend defaults. */
+  templates: PlanTemplates | null;
   selected: string | null;
   results: Map<string, boolean>;
   error: string | null;
+
+  /** Load persisted settings (templates). Called once at app start. */
+  loadSettings: () => Promise<void>;
 
   importPaths: (paths: string[], folderMode: boolean) => Promise<void>;
   setOrganize: (v: boolean) => void;
@@ -52,9 +63,28 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
   overrides: {},
   resolutions: {},
   organize: false,
+  templates: null,
   selected: null,
   results: new Map(),
   error: null,
+
+  async loadSettings() {
+    try {
+      const s = await getSettings();
+      const movie = s["templates.movie"];
+      const tv = s["templates.tv"];
+      if (movie || tv) {
+        set({
+          templates: {
+            movie: movie || "{title} {year}",
+            tv: tv || "{title} S{season:02} E{episode:02}",
+          },
+        });
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  },
 
   async importPaths(paths, folderMode) {
     if (paths.length === 0) return;
@@ -65,7 +95,9 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
         : scanPaths(paths));
       set({
         root: folderMode ? paths[0] : parentOf(paths[0]),
-        files: res.files.filter((f) => f.role === "video"),
+        files: res.files.filter(
+          (f) => f.role === "video" || f.role === "subtitle",
+        ),
         phase: "review",
         scanning: false,
       });
@@ -132,7 +164,8 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
   replan() {
     const gen = ++planGeneration;
     const run = async () => {
-      const { root, files, overrides, resolutions, organize } = get();
+      const { root, files, overrides, resolutions, organize, templates } =
+        get();
       if (!root || files.length === 0) {
         set({ plan: null });
         return;
@@ -142,6 +175,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
           root,
           files,
           organize,
+          templates,
           overrides,
           resolutions,
         });

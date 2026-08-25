@@ -1,27 +1,51 @@
 // ── SETTINGS ─────────────────────────────────────────────────
 
-import { useEffect, useState } from "react";
+import { Settings as SettingsIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { type Theme, useTheme } from "@/hooks/useTheme";
 import { t } from "@/i18n";
-import { getSettings, setSetting } from "@/lib/tauri";
-
-const THEME_OPTIONS: { value: Theme; labelKey: Parameters<typeof t>[0] }[] = [
-  { value: "light", labelKey: "settings.theme.light" },
-  { value: "dark", labelKey: "settings.theme.dark" },
-  { value: "system", labelKey: "settings.theme.system" },
-];
+import { getSettings, pickFolder, setSetting } from "@/lib/tauri";
+import { renderTemplatePreview, TEMPLATE_VARS } from "@/lib/templates";
 
 const DEFAULT_MOVIE_TPL = "{title} {year}";
 const DEFAULT_TV_TPL = "{title} S{season:02} E{episode:02}";
 
 export default function SettingsPage() {
-  const { theme, setTheme } = useTheme();
-
   // Templates: loaded once, edited locally, saved on blur.
   const [movieTpl, setMovieTpl] = useState(DEFAULT_MOVIE_TPL);
   const [tvTpl, setTvTpl] = useState(DEFAULT_TV_TPL);
+  // Destination folders: loaded once, changed via folder picker.
+  const [destMovie, setDestMovie] = useState("");
+  const [destTv, setDestTv] = useState("");
+  // TMDB API key for the posters page.
+  const [tmdbKey, setTmdbKey] = useState("");
+  // Which template the var chips insert into.
+  const lastFocused = useRef<"movie" | "tv">("movie");
+
+  // Insert at cursor; empty template → replace wholesale.
+  const insertVar = (v: (typeof TEMPLATE_VARS)[number]) => {
+    const tag = `{${v}}`;
+    const target = lastFocused.current;
+    const input = document.getElementById(
+      target === "movie" ? "tpl-movie" : "tpl-tv",
+    ) as HTMLInputElement | null;
+    if (!input) return;
+    const start = input.selectionStart ?? null;
+    const current = target === "movie" ? movieTpl : tvTpl;
+    const next =
+      start === null || current === ""
+        ? current + tag
+        : current.slice(0, start) + tag + current.slice(start);
+    const caret = (start ?? next.length) + tag.length;
+    if (target === "movie") setMovieTpl(next);
+    else setTvTpl(next);
+    requestAnimationFrame(() => {
+      input.focus();
+      input.setSelectionRange(caret, caret);
+    });
+  };
 
   useEffect(() => {
     let alive = true;
@@ -30,6 +54,9 @@ export default function SettingsPage() {
         if (!alive) return;
         setMovieTpl(s["templates.movie"] || DEFAULT_MOVIE_TPL);
         setTvTpl(s["templates.tv"] || DEFAULT_TV_TPL);
+        setDestMovie(s["folders.movie"] || "");
+        setDestTv(s["folders.tv"] || "");
+        setTmdbKey(s["tmdb.api_key"] || "");
       })
       .catch(console.error);
     return () => {
@@ -37,85 +64,203 @@ export default function SettingsPage() {
     };
   }, []);
 
-  // ponytail: save-on-blur instead of live; a "saved" toast lands when
-  // settings feedback becomes a priority.
+  // Live-save on each change; templates feed replan via the store.
   const saveTemplate = (key: string, value: string) =>
     void setSetting(key, value).catch(console.error);
 
+  const chooseFolder = (key: "folders.movie" | "folders.tv") => {
+    void pickFolder().then((path) => {
+      if (!path) return;
+      if (key === "folders.movie") setDestMovie(path);
+      else setDestTv(path);
+      void setSetting(key, path).catch(console.error);
+    });
+  };
+
+  const clearFolder = (key: "folders.movie" | "folders.tv") => {
+    if (key === "folders.movie") setDestMovie("");
+    else setDestTv("");
+    void setSetting(key, "").catch(console.error);
+  };
+
   return (
-    <div className="mx-auto h-full w-full max-w-xl space-y-4 overflow-y-auto p-6">
-      <h1 className="text-lg font-semibold">{t("nav.settings")}</h1>
+    <div className="flex h-full w-full flex-col gap-4 overflow-y-auto p-6">
+      <header className="sticky top-0 z-10 -mx-6 flex items-center gap-2 bg-background px-6 pb-3 pt-1">
+        <SettingsIcon className="size-4 text-primary" />
+        <h2 className="text-sm font-semibold">{t("nav.settings")}</h2>
+      </header>
 
       <section className="space-y-3 rounded-2xl border bg-card p-4">
-        <div className="space-y-1">
-          <h2 className="text-sm font-bold">{t("settings.appearance")}</h2>
-          <p className="text-xs text-muted-foreground">
-            {t("settings.appearance.hint")}
-          </p>
-        </div>
-        <fieldset className="flex gap-2 border-none p-0">
-          <legend className="sr-only">{t("settings.appearance")}</legend>
-          {THEME_OPTIONS.map(({ value, labelKey }) => (
-            <button
-              key={value}
-              type="button"
-              aria-pressed={theme === value}
-              onClick={() => setTheme(value)}
-              className={
-                theme === value
-                  ? "flex flex-1 items-center justify-center rounded-lg border border-primary bg-primary/10 px-3 py-2 text-xs font-semibold text-primary"
-                  : "flex flex-1 items-center justify-center rounded-lg border bg-secondary/50 px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-accent hover:text-foreground"
-              }
-            >
-              {t(labelKey)}
-            </button>
-          ))}
-        </fieldset>
-      </section>
-
-      <section className="space-y-3 rounded-2xl border bg-card p-4">
-        <div className="space-y-1">
+        <div className="space-y-2">
           <h2 className="text-sm font-bold">{t("settings.templates")}</h2>
-          <p dir="ltr" className="text-start text-xs text-muted-foreground">
-            {"{title} {year} {season} {episode} {resolution} {codec}"}
+          <p className="text-xs text-muted-foreground">
+            {t("settings.templates.hint")}
+          </p>
+          {/* Click a variable to insert it into the focused template. */}
+          <div className="flex flex-wrap gap-1.5" dir="ltr">
+            {TEMPLATE_VARS.map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => insertVar(v)}
+                className="rounded-md border bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              >
+                {`{${v}}`}
+              </button>
+            ))}
+          </div>
+        </div>
+        <TemplateField
+          id="tpl-movie"
+          label={t("settings.template.movie")}
+          value={movieTpl}
+          sample={`${renderTemplatePreview(movieTpl || DEFAULT_MOVIE_TPL)}.mkv`}
+          onChange={(v) => {
+            setMovieTpl(v);
+            saveTemplate("templates.movie", v.trim());
+          }}
+          onFocus={() => (lastFocused.current = "movie")}
+        />
+        <TemplateField
+          id="tpl-tv"
+          label={t("settings.template.tv")}
+          value={tvTpl}
+          sample={`${renderTemplatePreview(tvTpl || DEFAULT_TV_TPL)}.mkv`}
+          onChange={(v) => {
+            setTvTpl(v);
+            saveTemplate("templates.tv", v.trim());
+          }}
+          onFocus={() => (lastFocused.current = "tv")}
+        />
+      </section>
+
+      <section className="space-y-3 rounded-2xl border bg-card p-4">
+        <div className="space-y-1">
+          <h2 className="text-sm font-bold">{t("settings.folders")}</h2>
+          <p className="text-xs text-muted-foreground">
+            {t("settings.folders.hint")}
           </p>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="tpl-movie" dir="ltr">
-            {t("settings.template.movie")}
-          </Label>
-          <Input
-            id="tpl-movie"
-            dir="ltr"
-            value={movieTpl}
-            onChange={(e) => setMovieTpl(e.target.value)}
-            onBlur={() => saveTemplate("templates.movie", movieTpl.trim())}
-          />
+          <Label htmlFor="dest-movie">{t("settings.folders.movieLabel")}</Label>
+          <div className="flex flex-wrap gap-2">
+            <Input
+              id="dest-movie"
+              dir="ltr"
+              readOnly
+              value={destMovie}
+              placeholder={t("settings.folders.default")}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => chooseFolder("folders.movie")}
+            >
+              {t("settings.folders.pick")}
+            </Button>
+            {destMovie && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => clearFolder("folders.movie")}
+              >
+                {t("settings.folders.clear")}
+              </Button>
+            )}
+          </div>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="tpl-tv" dir="ltr">
-            {t("settings.template.tv")}
-          </Label>
-          <Input
-            id="tpl-tv"
-            dir="ltr"
-            value={tvTpl}
-            onChange={(e) => setTvTpl(e.target.value)}
-            onBlur={() => saveTemplate("templates.tv", tvTpl.trim())}
-          />
+          <Label htmlFor="dest-tv">{t("settings.folders.tvLabel")}</Label>
+          <div className="flex flex-wrap gap-2">
+            <Input
+              id="dest-tv"
+              dir="ltr"
+              readOnly
+              value={destTv}
+              placeholder={t("settings.folders.default")}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => chooseFolder("folders.tv")}
+            >
+              {t("settings.folders.pick")}
+            </Button>
+            {destTv && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => clearFolder("folders.tv")}
+              >
+                {t("settings.folders.clear")}
+              </Button>
+            )}
+          </div>
         </div>
       </section>
 
-      <section className="space-y-2 rounded-2xl border bg-card p-4">
-        <h2 className="text-sm font-bold">{t("settings.folders")}</h2>
-        <div
-          dir="ltr"
-          className="space-y-1 text-start text-xs text-muted-foreground"
-        >
-          <p>{t("settings.folders.movie")}</p>
-          <p>{t("settings.folders.tv")}</p>
+      <section className="space-y-3 rounded-2xl border bg-card p-4">
+        <div className="space-y-1">
+          <h2 className="text-sm font-bold">{t("settings.tmdb")}</h2>
+          <p className="text-xs text-muted-foreground">
+            {t("settings.tmdb.hint")}
+          </p>
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="tmdb-key">{t("settings.tmdb.keyLabel")}</Label>
+          <Input
+            id="tmdb-key"
+            dir="ltr"
+            type="password"
+            value={tmdbKey}
+            placeholder="—"
+            onChange={(e) => setTmdbKey(e.target.value)}
+            onBlur={() => saveTemplate("tmdb.api_key", tmdbKey.trim())}
+          />
         </div>
       </section>
+    </div>
+  );
+}
+
+/** LTR template input with a live output preview underneath. */
+function TemplateField({
+  id,
+  label,
+  value,
+  sample,
+  onChange,
+  onFocus,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  sample: string;
+  onChange: (v: string) => void;
+  onFocus: () => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id} dir="ltr">
+        {label}
+      </Label>
+      <Input
+        id={id}
+        dir="ltr"
+        value={value}
+        placeholder={t("settings.template.empty")}
+        onFocus={onFocus}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <p dir="ltr" className="text-start text-xs text-muted-foreground">
+        {t("settings.template.preview")}
+      </p>
+      <p
+        dir="ltr"
+        className="truncate rounded-md bg-muted px-2 py-1.5 font-mono text-xs font-semibold"
+      >
+        {sample}
+      </p>
     </div>
   );
 }

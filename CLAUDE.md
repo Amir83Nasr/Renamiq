@@ -41,6 +41,6 @@ Name comes from **Rename + IQ** — intelligent media renaming and organization.
 
 - Always use `pnpm` instead of `npm` for installing dependencies and running scripts.
 - Never make a, b, or c text files.
-- App is Persian (فارسی) and RTL: all UI text in Persian, `dir="rtl"` on `<html>` (already set in index.html), font IRANYekanX (already wired in index.css). New components must follow RTL/Persian — no LTR assumptions, no English UI strings.
+- App is English and LTR: all UI text in English, `dir="ltr"` on `<html>` (already set in index.html), system font stack (wired in index.css). All strings live in `src/i18n/index.ts` — new components use `t()` keys, no hardcoded UI text.
 - Section separators in code files use this exact style (content padded so every line is the same total width of 60 chars):
   `── NAME ─────…─` where dashes fill to width 60. Wrap in `/* */` in CSS, `//` in JS/TSX.

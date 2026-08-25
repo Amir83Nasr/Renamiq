@@ -228,14 +228,28 @@ fn is_episode_word(t: &str) -> bool {
 
 /// Index of a plausible release-year token. Requires 1900–2100 and that the
 /// token is delimited (not part of a longer number like "2010p" or "12010").
+/// A year buried in a hyphenated token ("Toy-Story-5-2026-DUB") counts too.
 pub fn find_year_marker(tokens: &[String]) -> Option<usize> {
     tokens.iter().position(|t| {
         let clean = t.trim_matches(|c: char| !c.is_ascii_alphanumeric());
-        clean.len() == 4
+        if clean.len() == 4
             && clean.chars().all(|c| c.is_ascii_digit())
             && clean
                 .parse::<u16>()
                 .is_ok_and(|y| (1900..=2100).contains(&y))
+        {
+            return true;
+        }
+        // Hyphenated token with an embedded delimited segment: "-2026-" or
+        // leading/trailing dash around the digits.
+        t.split('-')
+            .any(|seg| {
+                seg.len() == 4
+                    && seg.chars().all(|c| c.is_ascii_digit())
+                    && seg
+                        .parse::<u16>()
+                        .is_ok_and(|y| (1900..=2100).contains(&y))
+            })
     })
 }
 

@@ -1,84 +1,113 @@
 // ── APP MAIN COMPONENT ───────────────────────────────────────
 
-import { Activity, Film, Settings as SettingsIcon } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  type PointerEvent as ReactPointerEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { AppSidebar, type PageId } from "@/components/app-sidebar";
+import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { TitleBar } from "@/components/ui/titlebar";
-import { type MessageKey, t } from "@/i18n";
-import { cn } from "@/lib/utils";
-import ActivityPage from "@/pages/ActivityPage";
+import { t } from "@/i18n";
+import EmbedPage from "@/pages/EmbedPage";
+import PostersPage from "@/pages/PostersPage";
 import SettingsPage from "@/pages/SettingsPage";
+import SubkadePage from "@/pages/SubkadePage";
 import WorkspacePage from "@/pages/WorkspacePage";
 import { useWorkspace } from "@/stores/workspace";
 
-type PageId = "workspace" | "activity" | "settings";
+// ── SIDEBAR RESIZE ───────────────────────────────────────────
 
-const NAV: { id: PageId; icon: typeof Film; labelKey: MessageKey }[] = [
-  { id: "workspace", icon: Film, labelKey: "nav.workspace" },
-  { id: "activity", icon: Activity, labelKey: "nav.activity" },
-  { id: "settings", icon: SettingsIcon, labelKey: "nav.settings" },
-];
+const MIN_SIDEBAR_WIDTH = 208;
+const MAX_SIDEBAR_WIDTH = 440;
+const DEFAULT_SIDEBAR_WIDTH = 256;
+
+const clampWidth = (w: number) =>
+  Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, w));
+
+// ── APP ──────────────────────────────────────────────────────
 
 export default function App() {
   const [page, setPage] = useState<PageId>("workspace");
   const loadSettings = useWorkspace((s) => s.loadSettings);
+  const [width, setWidth] = useState(() => {
+    const saved = Number(localStorage.getItem("sidebar-width"));
+    return Number.isFinite(saved) && saved > 0
+      ? clampWidth(saved)
+      : DEFAULT_SIDEBAR_WIDTH;
+  });
+  const [dragging, setDragging] = useState(false);
+  const drag = useRef({ startX: 0, startWidth: 0 });
+
+  const startDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = { startX: e.clientX, startWidth: width };
+    setDragging(true);
+  };
+  const moveDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!dragging) return;
+    setWidth(
+      clampWidth(drag.current.startWidth + e.clientX - drag.current.startX),
+    );
+  };
+  const endDrag = (e: ReactPointerEvent<HTMLDivElement>) => {
+    if (!dragging) return;
+    setDragging(false);
+    // Recompute from event: `width` may be one render behind the last move.
+    localStorage.setItem(
+      "sidebar-width",
+      String(
+        clampWidth(drag.current.startWidth + e.clientX - drag.current.startX),
+      ),
+    );
+  };
 
   useEffect(() => {
     void loadSettings();
   }, [loadSettings]);
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden rounded-4xl bg-background">
-      <TitleBar />
-      <div className="flex min-h-0 flex-1 flex-row-reverse">
-        {/* Sidebar sits on the RIGHT in RTL; flex-row-reverse + dir=rtl keeps
-            it at the visual start edge. */}
-        <nav className="flex w-48 shrink-0 select-none flex-col border-s border-border/40 bg-background/40 px-2.5 py-3 backdrop-blur-2xl">
-          <div className="mb-3 flex items-center gap-2 px-2 pt-1">
-            <span className="text-sm font-bold">{t("app.title")}</span>
-          </div>
-
-          <ul className="flex-1 space-y-0.5">
-            {NAV.map(({ id, icon: Icon, labelKey }) => {
-              const active = page === id;
-              return (
-                <li key={id}>
-                  <button
-                    type="button"
-                    onClick={() => setPage(id)}
-                    aria-current={active ? "page" : undefined}
-                    className={cn(
-                      "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors",
-                      active
-                        ? "bg-accent font-semibold text-accent-foreground shadow-2xs"
-                        : "text-foreground/80 hover:bg-accent/50 hover:text-foreground",
-                    )}
-                  >
-                    <Icon
-                      className={cn(
-                        "size-4",
-                        active ? "text-primary" : "text-muted-foreground",
-                      )}
-                    />
-                    <span>{t(labelKey)}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-
-          <div className="mt-auto border-t border-border/40 px-2 pt-2.5">
-            <p className="text-[10px] leading-tight text-muted-foreground/60">
-              {t("app.tagline")}
-            </p>
-          </div>
-        </nav>
-
-        <main className="min-w-0 flex-1 overflow-hidden bg-background">
-          {page === "workspace" && <WorkspacePage />}
-          {page === "activity" && <ActivityPage />}
-          {page === "settings" && <SettingsPage />}
-        </main>
+    <SidebarProvider
+      style={{ "--sidebar-width": `${width}px` } as React.CSSProperties}
+      className={dragging ? "**:transition-none!" : undefined}
+    >
+      <div className="flex h-screen flex-col overflow-hidden bg-background">
+        <TitleBar />
+        <div className="flex min-h-0 flex-1">
+          <AppSidebar page={page} onNavigate={setPage} />
+          {/* ponytail: mouse-only resize handle; add keyboard arrow support if ever needed */}
+          <ResizeHandle
+            onPointerDown={startDrag}
+            onPointerMove={moveDrag}
+            onPointerUp={endDrag}
+            onDoubleClick={() => setWidth(DEFAULT_SIDEBAR_WIDTH)}
+          />
+          <main className="min-w-0 flex-1 overflow-hidden">
+            {page === "workspace" && <WorkspacePage />}
+            {page === "subkade" && <SubkadePage />}
+            {page === "embed" && <EmbedPage />}
+            {page === "posters" && <PostersPage />}
+            {page === "settings" && <SettingsPage />}
+          </main>
+        </div>
       </div>
-    </div>
+    </SidebarProvider>
+  );
+}
+
+// ── RESIZE HANDLE ────────────────────────────────────────────
+
+function ResizeHandle(props: React.ComponentProps<"hr">) {
+  const { isMobile, state } = useSidebar();
+  if (isMobile || state === "collapsed") return null;
+  return (
+    <hr
+      aria-orientation="vertical"
+      aria-label={t("sidebar.resize")}
+      title={t("sidebar.resize")}
+      {...props}
+      className="z-10 m-0 h-auto w-1 shrink-0 cursor-col-resize rounded-full border-none hover:bg-sidebar-border active:bg-sidebar-border"
+    />
   );
 }

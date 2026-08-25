@@ -12,6 +12,13 @@ node_modules
 dist
 dist-ssr
 *.local
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+
+# ── TEST MEDIA ────────────────────────────────────────────
+*.mkv
+*.mp4
 
 # ── EDITOR ────────────────────────────────────────────────
 .vscode/*
@@ -23,3 +30,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# ── DESIGN ────────────────────────────────────────────────
+*.ai

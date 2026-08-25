@@ -4,11 +4,12 @@
 import {
   CheckCircle2,
   Eraser,
+  Import,
   RotateCcw,
   ShieldCheck,
   XCircle,
 } from "lucide-react";
-import { useState } from "react";
+import { type ReactNode, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -20,14 +21,39 @@ import { type MessageKey, t } from "@/i18n";
 import { executeOperations, undoLastOperation } from "@/lib/tauri";
 import { statusCounts, useWorkspace } from "@/stores/workspace";
 
+/** Page header + shell copied from the other pages for a uniform look. */
+function PageHeader({ children }: { children?: ReactNode }) {
+  return (
+    <>
+      <header className="sticky top-0 z-10 -mx-6 flex items-center gap-2 bg-background px-6 pb-3 pt-1">
+        <Import className="size-4 text-primary" />
+        <h2 className="text-sm font-semibold">{t("nav.workspace")}</h2>
+      </header>
+      {children}
+    </>
+  );
+}
+
 export default function WorkspacePage() {
   const ws = useWorkspace();
   const [confirming, setConfirming] = useState(false);
   const counts = statusCounts(ws.plan?.items ?? []);
 
-  if (ws.phase === "import") return <Dropzone />;
+  if (ws.phase === "import")
+    return (
+      <PageShell>
+        <PageHeader />
+        <Dropzone />
+      </PageShell>
+    );
 
-  if (ws.phase === "result") return <ResultView />;
+  if (ws.phase === "result")
+    return (
+      <PageShell>
+        <PageHeader />
+        <ResultView />
+      </PageShell>
+    );
 
   const executable = (ws.plan?.items ?? []).filter((i) => i.status === "ready");
 
@@ -43,70 +69,81 @@ export default function WorkspacePage() {
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      {/* Toolbar: batch summary + organize toggle + actions */}
-      <header className="flex items-center gap-3 border-b bg-background/60 px-5 py-3">
-        <Badge variant="secondary">
-          {t("workspace.fileCount", { count: ws.files.length })}
-        </Badge>
-        <span
-          className="flex items-center gap-1 text-xs text-success"
-          dir="ltr"
-        >
-          ● {counts.ready}
-        </span>
-        {counts.needsReview > 0 && (
-          <span className="text-xs text-warning" dir="ltr">
-            ● {counts.needsReview}
-          </span>
-        )}
-        {counts.conflict > 0 && (
-          <span className="text-xs text-destructive" dir="ltr">
-            ● {counts.conflict}
-          </span>
-        )}
-        {counts.errors > 0 && (
-          <span className="text-xs text-destructive/70" dir="ltr">
-            ● {counts.errors}
-          </span>
-        )}
-
-        <div className="ms-auto flex items-center gap-3">
-          {/* biome-ignore lint/a11y/noLabelWithoutControl: Switch renders a button */}
-          <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-            {t("workspace.organizeIntoFolders")}
-            <Switch
-              checked={ws.organize}
-              onCheckedChange={ws.setOrganize}
-              aria-label={t("workspace.organizeIntoFolders")}
-            />
-          </label>
-          <Button variant="ghost" size="sm" onClick={ws.clearAll}>
-            <Eraser /> {t("workspace.clear")}
-          </Button>
-          <Button
-            size="sm"
-            disabled={executable.length === 0 || ws.planning}
-            onClick={() => setConfirming(true)}
+    <PageShell>
+      <div className="flex h-full min-h-0 flex-col">
+        {/* Toolbar: batch summary + organize toggle + actions */}
+        <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-background/60 px-5 py-3">
+          <Badge variant="secondary">
+            {t("workspace.fileCount", { count: ws.files.length })}
+          </Badge>
+          <span
+            className="flex items-center gap-1 text-xs text-success"
+            dir="ltr"
           >
-            <ShieldCheck />
-            {t("confirm.rename")}
-          </Button>
-        </div>
-      </header>
+            ● {counts.ready}
+          </span>
+          {counts.needsReview > 0 && (
+            <span className="text-xs text-warning" dir="ltr">
+              ● {counts.needsReview}
+            </span>
+          )}
+          {counts.conflict > 0 && (
+            <span className="text-xs text-destructive" dir="ltr">
+              ● {counts.conflict}
+            </span>
+          )}
+          {counts.errors > 0 && (
+            <span className="text-xs text-destructive/70" dir="ltr">
+              ● {counts.errors}
+            </span>
+          )}
 
-      <div className="flex min-h-0 flex-1">
-        <div className="flex min-w-0 flex-1 flex-col gap-2 p-4">
-          <FileList />
+          <div className="ms-auto flex flex-wrap items-center gap-x-3 gap-y-2">
+            {/* biome-ignore lint/a11y/noLabelWithoutControl: Switch renders a button */}
+            <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
+              {t("workspace.organizeIntoFolders")}
+              <Switch
+                checked={ws.organize}
+                onCheckedChange={ws.setOrganize}
+                aria-label={t("workspace.organizeIntoFolders")}
+              />
+            </label>
+            <Button variant="ghost" size="sm" onClick={ws.clearAll}>
+              <Eraser /> {t("workspace.clear")}
+            </Button>
+            <Button
+              size="sm"
+              disabled={executable.length === 0 || ws.planning}
+              onClick={() => setConfirming(true)}
+            >
+              <ShieldCheck />
+              {t("confirm.rename")}
+            </Button>
+          </div>
+        </header>
+
+        <div className="flex min-h-0 flex-1">
+          <div className="flex min-w-0 flex-1 flex-col gap-2 p-4">
+            <FileList />
+          </div>
+          {ws.selected && <FileEditor key={ws.selected} />}
         </div>
-        {ws.selected && <FileEditor key={ws.selected} />}
+
+        <ConfirmDialog
+          open={confirming}
+          onConfirm={() => void runRename()}
+          onCancel={() => setConfirming(false)}
+        />
       </div>
+    </PageShell>
+  );
+}
 
-      <ConfirmDialog
-        open={confirming}
-        onConfirm={() => void runRename()}
-        onCancel={() => setConfirming(false)}
-      />
+/** Same centered column layout as the other pages. */
+function PageShell({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex h-full w-full flex-col gap-4 overflow-y-auto p-6">
+      {children}
     </div>
   );
 }

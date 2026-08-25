@@ -5,7 +5,7 @@ SHELL := /bin/bash
 
 .DEFAULT_GOAL := help
 
-.PHONY: install hooks dev tauri build app preview lint format fix typecheck test check rust clean help
+.PHONY: install hooks dev tauri build app preview bundle bundle-mac bundle-linux bundle-windows lint format fix typecheck test check rust clean help
 
 define LOGO
 ██████╗ ███████╗███╗   ██╗ █████╗ ███╗   ███╗██╗  ██████╗
@@ -46,6 +46,21 @@ build: ## Frontend production build (tsc + vite)
 
 preview: ## Preview frontend production build
 	@pnpm preview
+
+# ─── Distribution ─────────────────────────────────────────────────────────────
+# Cross-compiling from mac needs extra toolchain; CI runner on target OS is safer.
+# Output lands in src-tauri/target/release/bundle/.
+bundle: ## Bundle for current OS (Tauri)
+	@pnpm tauri build && echo "  ✓ Bundled"
+
+bundle-mac: ## Bundle macOS .app/.dmg (Apple Silicon)
+	@pnpm tauri build --target aarch64-apple-darwin && echo "  ✓ macOS (arm64) bundled"
+
+bundle-linux: ## Bundle Linux (.deb/.rpm/AppImage)
+	@pnpm tauri build --target x86_64-unknown-linux-gnu && echo "  ✓ Linux bundled"
+
+bundle-windows: ## Bundle Windows installer (.msi/.nsis)
+	@pnpm tauri build --target x86_64-pc-windows-msvc && echo "  ✓ Windows bundled"
 
 # ─── Quality ──────────────────────────────────────────────────────────────────
 lint: ## Lint (Biome check)

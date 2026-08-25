@@ -4,6 +4,12 @@ import { Download, Loader2, Search, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { t } from "@/i18n";
 import {
   type SubkadeResult,
@@ -58,7 +64,9 @@ export function SubkadeDialog({
       aria-modal="true"
       aria-label={t("subkade.title")}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6 backdrop-blur-sm"
-      onClick={onClose}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
       onKeyDown={(e) => {
         if (e.key === "Escape") onClose();
       }}
@@ -66,14 +74,23 @@ export function SubkadeDialog({
       <div className="flex max-h-[80vh] w-full max-w-lg flex-col gap-3 rounded-2xl border bg-card p-4 shadow-2xl">
         <header className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">{t("subkade.title")}</h3>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onClose}
-            aria-label={t("confirm.cancel")}
-          >
-            <X className="size-4" />
-          </Button>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={onClose}
+                    aria-label={t("confirm.cancel")}
+                  />
+                }
+              >
+                <X className="size-4" />
+              </TooltipTrigger>
+              <TooltipContent>{t("confirm.cancel")}</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </header>
 
         <form

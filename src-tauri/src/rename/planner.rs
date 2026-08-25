@@ -85,6 +85,9 @@ pub struct PlanRequest {
     pub files: Vec<ScannedFile>,
     /// Organize into Movies/ and TV Shows/ folder structure.
     pub organize: bool,
+    /// Configured destination roots for movies/series; None = defaults.
+    #[serde(default)]
+    pub destinations: Option<Destinations>,
     /// Custom naming templates; missing/empty falls back to defaults.
     #[serde(default)]
     pub templates: Option<PlanTemplates>,
@@ -124,6 +127,16 @@ impl Default for PlanTemplates {
     }
 }
 
+/// User-configurable destination roots for organizing (settings page).
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Destinations {
+    #[serde(default)]
+    pub movie: PathBuf,
+    #[serde(default)]
+    pub tv: PathBuf,
+}
+
 /// Metadata after merging an override on top of the parse.
 struct EffectiveMeta {
     kind: MediaKind,
@@ -131,6 +144,8 @@ struct EffectiveMeta {
     year: Option<u16>,
     season: Option<u8>,
     episode: Option<u8>,
+    resolution: Option<String>,
+    codec: Option<String>,
 }
 
 fn effective(parsed: &ParsedMedia, ovr: &FileOverride) -> EffectiveMeta {
@@ -145,6 +160,8 @@ fn effective(parsed: &ParsedMedia, ovr: &FileOverride) -> EffectiveMeta {
         year: ovr.year.or(parsed.year),
         season: ovr.season.or(parsed.season),
         episode: ovr.episode.or(parsed.episode),
+        resolution: parsed.resolution.clone(),
+        codec: parsed.codec.clone(),
     }
 }
 
@@ -164,10 +181,14 @@ pub fn build_plan(req: &PlanRequest) -> RenamePlan {
             continue;
         }
         let item = build_item(req, file, &ovr);
-        // Already correctly named → nothing to do, drop from the plan.
-        if norm_key(&item.destination) != norm_key(&item.path) {
-            items.push(item);
+        // Correctly named AND healthy → nothing to do, drop from the plan.
+        // Error items stay visible so the editor can fix them manually.
+        if item.status != ItemStatus::Error
+            && norm_key(&item.destination) == norm_key(&item.path)
+        {
+            continue;
         }
+        items.push(item);
     }
 
     // ponytail: includeSubtitles=false only skips the rename pass; files
@@ -440,8 +461,8 @@ fn render_stem(kind: MediaKind, m: &EffectiveMeta, tpl: Option<&PlanTemplates>) 
         season: m.season,
         episode: m.episode,
         episodes: None,
-        resolution: None,
-        codec: None,
+        resolution: m.resolution.clone(),
+        codec: m.codec.clone(),
         audio: None,
         language: None,
         group: None,
@@ -485,11 +506,18 @@ fn directory_for(
     if !req.organize || req.root.as_os_str().is_empty() {
         return flat;
     }
+    let dest = req.destinations.as_ref();
+    let movie_root = dest
+        .filter(|d| !d.movie.as_os_str().is_empty())
+        .map(|d| d.movie.clone())
+        .unwrap_or_else(|| req.root.join("Movies"));
+    let tv_root = dest
+        .filter(|d| !d.tv.as_os_str().is_empty())
+        .map(|d| d.tv.clone())
+        .unwrap_or_else(|| req.root.join("TV Shows"));
     match kind {
-        MediaKind::Movie => req.root.join("Movies").join(sanitize_filename(title)),
-        MediaKind::Tv => req
-            .root
-            .join("TV Shows")
+        MediaKind::Movie => movie_root.join(sanitize_filename(title)),
+        MediaKind::Tv => tv_root
             .join(sanitize_filename(title))
             .join(
                 season

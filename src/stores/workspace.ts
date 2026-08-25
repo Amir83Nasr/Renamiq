@@ -9,6 +9,7 @@ import {
 } from "@/lib/tauri";
 import type {
   ConflictResolution,
+  Destinations,
   FileOverride,
   PlanItem,
   PlanTemplates,
@@ -31,6 +32,8 @@ interface WorkspaceState {
   organize: boolean;
   /** Naming templates loaded from settings; null = backend defaults. */
   templates: PlanTemplates | null;
+  /** Destination roots loaded from settings; null = backend defaults. */
+  destinations: Destinations | null;
   selected: string | null;
   results: Map<string, boolean>;
   error: string | null;
@@ -64,6 +67,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
   resolutions: {},
   organize: false,
   templates: null,
+  destinations: null,
   selected: null,
   results: new Map(),
   error: null,
@@ -79,6 +83,13 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
             movie: movie || "{title} {year}",
             tv: tv || "{title} S{season:02} E{episode:02}",
           },
+        });
+      }
+      const destMovie = s["folders.movie"]?.trim();
+      const destTv = s["folders.tv"]?.trim();
+      if (destMovie || destTv) {
+        set({
+          destinations: { movie: destMovie || "", tv: destTv || "" },
         });
       }
     } catch (err) {
@@ -164,8 +175,15 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
   replan() {
     const gen = ++planGeneration;
     const run = async () => {
-      const { root, files, overrides, resolutions, organize, templates } =
-        get();
+      const {
+        root,
+        files,
+        overrides,
+        resolutions,
+        organize,
+        templates,
+        destinations,
+      } = get();
       if (!root || files.length === 0) {
         set({ plan: null });
         return;
@@ -176,6 +194,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
           files,
           organize,
           templates,
+          destinations,
           overrides,
           resolutions,
         });

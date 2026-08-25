@@ -24,6 +24,7 @@ fn plan_req(root: &std::path::Path, files: Vec<crate::scanner::ScannedFile>) -> 
         root: root.to_path_buf(),
         files,
         organize: false,
+        destinations: None,
         templates: None,
         include_subtitles: None,
         overrides: HashMap::new(),
@@ -74,6 +75,37 @@ fn organize_builds_tv_folders() {
         "{}",
         plan.items[0].destination.display()
     );
+    fs::remove_dir_all(&root).ok();
+}
+
+#[test]
+fn organize_uses_configured_destinations() {
+    let root = temp_tree("dest");
+    let movies = root.join("my-movies");
+    let series = root.join("my-series");
+    fs::write(root.join("Some.Movie.2024.1080p.mkv"), b"v").unwrap();
+    fs::write(root.join("Show.Name.S01E01.720p.mkv"), b"v").unwrap();
+
+    let mut r = plan_req(&root, scan_directory(&root).unwrap().files);
+    r.organize = true;
+    r.destinations = Some(crate::rename::planner::Destinations {
+        movie: movies.clone(),
+        tv: series.clone(),
+    });
+    let plan = build_plan(&r);
+
+    for it in &plan.items {
+        if it.kind == MediaKind::Movie {
+            assert_eq!(it.directory, movies.join("Some Movie"), "{}", it.path.display());
+        } else {
+            assert_eq!(
+                it.directory,
+                series.join("Show Name").join("Season 01"),
+                "{}",
+                it.path.display()
+            );
+        }
+    }
     fs::remove_dir_all(&root).ok();
 }
 
@@ -228,6 +260,7 @@ fn unit_req(files: Vec<ScannedFile>) -> PlanRequest {
         root: PathBuf::from("/lib"),
         files,
         organize: false,
+        destinations: None,
         templates: None,
         include_subtitles: None,
         overrides: HashMap::new(),
@@ -253,6 +286,24 @@ fn year_only_file_is_ready_movie() {
     let it = &plan.items[0];
     assert_eq!(it.status, ItemStatus::Ready);
     assert_eq!(it.new_name, "Show Name 2020.mkv");
+}
+
+#[test]
+fn hyphen_embedded_year_parses_title_and_year() {
+    // "Toy-Story-5-2026-DUB_1080": year buried in a hyphenated token.
+    let p = crate::parser::parse_filename("Toy-Story-5-2026-DUB_1080.mkv");
+    assert_eq!(p.kind, MediaKind::Movie);
+    assert_eq!(p.title, "Toy Story 5");
+    assert_eq!(p.year, Some(2026));
+}
+
+#[test]
+fn unparseable_file_stays_visible_for_manual_fix() {
+    // No markers at all → Error status but the row must still appear
+    // so the editor can override it manually (was silently dropped).
+    let plan = build_plan(&unit_req(vec![video("seg-1-v1-a1.mkv")]));
+    assert_eq!(plan.items.len(), 1);
+    assert_eq!(plan.items[0].status, ItemStatus::Error);
 }
 
 #[test]

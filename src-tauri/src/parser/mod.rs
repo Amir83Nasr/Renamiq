@@ -94,12 +94,25 @@ fn parse_tv(stem: &str, tokens: &[String], hit: tokens::EpisodeHit) -> ParsedMed
 
 fn parse_movie(stem: &str, tokens: &[String], year_idx: usize) -> ParsedMedia {
     let mut out = base(stem, MediaKind::Movie);
-    out.year = tokens[year_idx]
-        .trim_matches(|c: char| !c.is_ascii_digit())
-        .parse()
-        .ok();
-    let title_tokens = &tokens[..year_idx];
-    out.title = join_title(title_tokens);
+    // Year may sit inside a hyphenated token ("Toy-Story-5-2026-DUB").
+    let year_token = &tokens[year_idx];
+    let embedded_year = year_token.split('-').find(|seg| {
+        seg.len() == 4 && seg.chars().all(|c| c.is_ascii_digit())
+    });
+    let year_str = embedded_year
+        .unwrap_or(year_token.trim_matches(|c: char| !c.is_ascii_digit()));
+    out.year = year_str.parse().ok();
+    // When the year was embedded, text before it in the same token is
+    // title ("Toy-Story-5" ← "Toy-Story-5-2026-DUB").
+    let mut title_tokens: Vec<String> = tokens[..year_idx].to_vec();
+    if let Some(y) = embedded_year {
+        if let Some((prefix, _)) = year_token.split_once(&format!("-{y}")) {
+            if !prefix.is_empty() {
+                title_tokens.push(prefix.to_string());
+            }
+        }
+    }
+    out.title = join_title(&title_tokens);
     out.low_confidence = out.title.is_empty() || out.title.chars().count() < 3;
     classify_tail(tokens, year_idx + 1, &mut out, false);
     out

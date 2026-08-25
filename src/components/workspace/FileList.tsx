@@ -69,11 +69,14 @@ function FileRow({
 }) {
   const badge = STATUS_BADGE[item.status];
   const StatusIcon = STATUS_ICON[item.status];
+  // Error rows have no proposal (newName is just the extension) — show
+  // them unchanged until the editor fills in a valid one.
   const changed =
-    item.newName !== item.originalName ||
-    !item.destination.startsWith(
-      item.path.slice(0, item.path.lastIndexOf("/")),
-    );
+    item.status !== "error" &&
+    (item.newName !== item.originalName ||
+      !item.destination.startsWith(
+        item.path.slice(0, item.path.lastIndexOf("/")),
+      ));
 
   return (
     <li className="border-none">

@@ -87,11 +87,18 @@ export interface PlanTemplates {
   tv: string;
 }
 
+/** User-configurable destination roots for organizing (settings page). */
+export interface Destinations {
+  movie: string;
+  tv: string;
+}
+
 export interface PlanRequest {
   root: string;
   files: ScannedFile[];
   organize: boolean;
   templates?: PlanTemplates | null;
+  destinations?: Destinations | null;
   includeSubtitles?: boolean;
   overrides: Record<string, FileOverride>;
   resolutions: Record<string, ConflictResolution>;

@@ -7,6 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { SubkadeDialog } from "@/components/workspace/SubkadeDialog";
 import { type MessageKey, t } from "@/i18n";
 import { useWorkspace } from "@/stores/workspace";
@@ -51,23 +57,29 @@ export function FileEditor() {
   };
 
   return (
-    <aside className="flex w-80 shrink-0 flex-col gap-4 overflow-y-auto border-s bg-card p-4">
+    <aside className="flex w-64 shrink-0 flex-col gap-4 overflow-y-auto border-s bg-card p-4 xl:w-80">
       <header className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">{t("editor.title")}</h3>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setSelected(null)}
-          aria-label={t("confirm.cancel")}
-        >
-          <X className="size-4" />
-        </Button>
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setSelected(null)}
+                  aria-label={t("confirm.cancel")}
+                />
+              }
+            >
+              <X className="size-4" />
+            </TooltipTrigger>
+            <TooltipContent>{t("confirm.cancel")}</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </header>
 
-      <p
-        dir="ltr"
-        className="truncate rounded-md bg-muted px-2 py-1.5 text-xs text-muted-foreground"
-      >
+      <p className="truncate rounded-md bg-muted px-2 py-1.5 text-xs text-muted-foreground">
         {item.originalName}
       </p>
 
@@ -112,10 +124,7 @@ export function FileEditor() {
           </div>
           <div className="space-y-1.5">
             <Label>{t("editor.preview")}</Label>
-            <p
-              dir="ltr"
-              className="break-all rounded-lg bg-primary/10 px-3 py-2.5 text-sm font-bold text-primary"
-            >
+            <p className="break-all rounded-lg bg-primary/10 px-3 py-2.5 text-sm font-bold text-primary">
               {item.newName}
             </p>
           </div>
@@ -221,10 +230,7 @@ export function FileEditor() {
           {/* LIVE PREVIEW — always reflects current fields. */}
           <div className="space-y-1.5">
             <Label>{t("editor.preview")}</Label>
-            <p
-              dir="ltr"
-              className="break-all rounded-lg bg-primary/10 px-3 py-2.5 text-sm font-bold text-primary"
-            >
+            <p className="break-all rounded-lg bg-primary/10 px-3 py-2.5 text-sm font-bold text-primary">
               {item.status === "error" ? "—" : item.newName}
             </p>
           </div>

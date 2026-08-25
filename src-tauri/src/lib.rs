@@ -47,6 +47,10 @@ pub fn run() {
             commands::set_setting,
             commands::subkade_search,
             commands::subkade_download,
+            commands::subkade_download_to_folder,
+            commands::embed_subtitle,
+            commands::tmdb_search,
+            commands::tmdb_download_poster,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

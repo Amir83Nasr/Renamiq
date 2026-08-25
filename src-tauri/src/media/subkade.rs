@@ -14,14 +14,25 @@ pub struct SubkadeResult {
     pub post_id: u32,
     pub title: String,
     pub url: String,
+    /// Poster thumbnail from the search card; empty when the card has none.
+    pub image: String,
 }
+
+/// dl hosts reject non-browser agents with 403, so pretend to be Chrome.
+const BROWSER_UA: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) \
+    AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
 
 fn http() -> AppResult<reqwest::blocking::Client> {
     reqwest::blocking::Client::builder()
-        .user_agent("Mozilla/5.0 (Renamiq)")
+        .user_agent(BROWSER_UA)
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| RenamiqError::with_source("Network is unavailable", e))
+}
+
+/// GET on the dl host requires a same-site Referer or it answers 403.
+fn dl_request(client: &reqwest::blocking::Client, url: &str) -> reqwest::blocking::RequestBuilder {
+    client.get(url).header(reqwest::header::REFERER, format!("{SITE}/"))
 }
 
 /// Search the site's HTML endpoint (`/?s=query`) — the WP REST API rejects
@@ -57,9 +68,14 @@ pub fn search(query: &str, limit: u8) -> AppResult<Vec<SubkadeResult>> {
             .split("href=\"")
             .nth(1)
             .and_then(|h| h.find('"').map(|end| &h[..end]));
-        // Title is the <h3 …>…</h3> after the card opens.
+        // Card body runs to the matching </a>; poster <img> and title <h3>
+        // both live inside it.
         let h3_from = anchor_start;
-        let title = rest[h3_from..]
+        let card_body = match rest[h3_from..].find("</a>") {
+            Some(end) => &rest[h3_from..h3_from + end],
+            None => break,
+        };
+        let title = card_body
             .split("<h3")
             .nth(1)
             .and_then(|h| h.split_once('>').map(|(_, body)| body))
@@ -67,6 +83,12 @@ pub fn search(query: &str, limit: u8) -> AppResult<Vec<SubkadeResult>> {
                 body.find("</h3>")
                     .map(|end| strip_tags(&body[..end]).trim().to_string())
             });
+        let image = card_body
+            .split("<img")
+            .nth(1)
+            .and_then(|tag| tag.split("src=\"").nth(1))
+            .and_then(|s| s.find('"').map(|end| s[..end].to_string()))
+            .unwrap_or_default();
         match (href, title) {
             (Some(url), Some(title)) if !url.is_empty() && !title.is_empty() => {
                 let post_id = url
@@ -79,6 +101,7 @@ pub fn search(query: &str, limit: u8) -> AppResult<Vec<SubkadeResult>> {
                     post_id,
                     title,
                     url: url.trim().to_string(),
+                    image,
                 });
                 // Continue after this card's </a>.
                 rest = &rest[h3_from..];
@@ -123,18 +146,35 @@ pub fn find_zip_link(post_url: &str) -> AppResult<String> {
     ))
 }
 
+/// Content-Length of the zip in bytes, for showing a size hint.
+pub fn zip_size(zip_url: &str) -> AppResult<u64> {
+    let len = dl_request(&http()?, zip_url)
+        .timeout(std::time::Duration::from_secs(15))
+        .send()
+        .map_err(|e| RenamiqError::with_source("Could not reach file", e))?
+        .error_for_status()
+        .map_err(|e| RenamiqError::with_source("Could not reach file", e))?
+        .content_length()
+        .ok_or_else(|| RenamiqError::user("File size is unknown"))?;
+    Ok(len)
+}
+
 /// Download the zip and extract subtitle files next to `video_path`.
 /// Returns extracted file paths.
 pub fn download_and_extract(zip_url: &str, video_path: &std::path::Path) -> AppResult<Vec<std::path::PathBuf>> {
-    if !zip_url.starts_with("https://") || !zip_url.contains(DL_HOST) {
-        return Err(RenamiqError::user("Unexpected download host"));
-    }
     let dest_dir = video_path
         .parent()
         .ok_or_else(|| RenamiqError::user("Video has no parent folder"))?;
+    download_to_dir(zip_url, dest_dir)
+}
 
-    let bytes = http()?
-        .get(zip_url)
+/// Download the zip and extract subtitle files into `dest_dir` directly.
+pub fn download_to_dir(zip_url: &str, dest_dir: &std::path::Path) -> AppResult<Vec<std::path::PathBuf>> {
+    if !zip_url.starts_with("https://") || !zip_url.contains(DL_HOST) {
+        return Err(RenamiqError::user("Unexpected download host"));
+    }
+
+    let bytes = dl_request(&http()?, zip_url)
         .timeout(std::time::Duration::from_secs(120))
         .send()
         .map_err(|e| RenamiqError::with_source("Download failed", e))?
@@ -196,6 +236,10 @@ fn strip_tags(html: &str) -> String {
 }
 
 /// Minimal percent-encoding for WP REST query strings.
+pub fn utf8_percent_encode_pub(s: &str) -> String {
+    utf8_percent_encode(s)
+}
+
 fn utf8_percent_encode(s: &str) -> String {
     s.bytes()
         .map(|b| match b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~') {

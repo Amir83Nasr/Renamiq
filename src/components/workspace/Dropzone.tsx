@@ -22,18 +22,18 @@ export function Dropzone() {
   };
 
   return (
-    <div className="flex flex-1 items-center justify-center p-8">
+    <section className="rounded-2xl border bg-card p-4">
       <div
         className={cn(
-          "flex w-full max-w-xl flex-col items-center gap-5 rounded-3xl border-2 border-dashed px-10 py-14 text-center transition-colors",
+          "flex flex-col items-center gap-5 rounded-xl border-2 border-dashed px-10 py-12 text-center transition-colors",
           isDragging
             ? "border-primary bg-primary/5"
             : "border-border hover:border-primary/50",
           error && "border-destructive",
         )}
       >
-        <div className="rounded-2xl bg-primary/10 p-4">
-          <Import className="size-7 text-primary" />
+        <div className="rounded-full bg-primary/10 p-6">
+          <Import className="size-10 text-primary" />
         </div>
         <div className="space-y-1.5">
           <h2 className="text-lg font-semibold">{t("workspace.drop.title")}</h2>
@@ -64,6 +64,6 @@ export function Dropzone() {
           </p>
         )}
       </div>
-    </div>
+    </section>
   );
 }

@@ -54,6 +54,8 @@ export interface SubkadeResult {
   postId: number;
   title: string;
   url: string;
+  /** Poster thumbnail URL; empty when the card has none. */
+  image: string;
 }
 
 export async function subkadeSearch(
@@ -70,6 +72,55 @@ export async function subkadeDownload(
 ): Promise<string[]> {
   return invoke("subkade_download", { postUrl, videoPath });
 }
+
+/** Standalone: downloads the zip, extracts subtitles into destDir.
+ *  Returns extracted paths and the zip size in bytes. */
+export async function subkadeDownloadToFolder(
+  postUrl: string,
+  destDir: string,
+): Promise<{ files: string[]; size: number }> {
+  const [files, size] = await invoke<[string[], number]>(
+    "subkade_download_to_folder",
+    { postUrl, destDir },
+  );
+  return { files, size };
+}
+
+/** Muxes subtitle into video via ffmpeg; returns the final video path. */
+export async function embedSubtitle(
+  video: string,
+  subtitle: string,
+  language?: string,
+): Promise<string> {
+  return invoke("embed_subtitle", { video, subtitle, language });
+}
+
+export interface TmdbResult {
+  id: number;
+  title: string;
+  year: number | null;
+  isTv: boolean;
+  posterPath: string | null;
+}
+
+export async function tmdbSearch(
+  query: string,
+  apiKey: string,
+  limit = 8,
+): Promise<TmdbResult[]> {
+  return invoke("tmdb_search", { query, apiKey, limit });
+}
+
+export async function tmdbDownloadPoster(
+  result: TmdbResult,
+  apiKey: string,
+  destDir: string,
+): Promise<string> {
+  return invoke("tmdb_download_poster", { result, apiKey, destDir });
+}
+
+export const TMDB_POSTER_URL = (posterPath: string) =>
+  `https://image.tmdb.org/t/p/w500${posterPath}`;
 
 /** Record keys are file paths; the Rust side expects a PathBuf-keyed map. */
 function toPathKeyedMap(resolutions: Record<string, ConflictResolution>) {

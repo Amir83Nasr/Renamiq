@@ -223,3 +223,51 @@ pub fn subkade_download(post_url: String, video_path: PathBuf) -> AppResult<Vec<
     let zip = crate::media::subkade::find_zip_link(&post_url)?;
     crate::media::subkade::download_and_extract(&zip, &video_path)
 }
+
+/// Standalone download: extracts subtitles straight into a folder.
+/// Returns (extracted files, zip size in bytes).
+#[tauri::command]
+pub fn subkade_download_to_folder(
+    post_url: String,
+    dest_dir: PathBuf,
+) -> AppResult<(Vec<PathBuf>, u64)> {
+    let zip = crate::media::subkade::find_zip_link(&post_url)?;
+    let size = crate::media::subkade::zip_size(&zip).unwrap_or(0);
+    let files = crate::media::subkade::download_to_dir(&zip, &dest_dir)?;
+    Ok((files, size))
+}
+
+// ── EMBED (SUBTITLE MUXING) ──────────────────────────────────
+
+#[tauri::command]
+pub fn embed_subtitle(
+    video: PathBuf,
+    subtitle: PathBuf,
+    language: Option<String>,
+) -> AppResult<PathBuf> {
+    crate::media::embed::embed(&crate::media::embed::EmbedRequest {
+        video,
+        subtitle,
+        language: language.unwrap_or_else(|| "per".into()),
+    })
+}
+
+// ── TMDB (POSTER SEARCH/DOWNLOAD) ────────────────────────────
+
+#[tauri::command]
+pub fn tmdb_search(
+    query: String,
+    api_key: String,
+    limit: Option<u8>,
+) -> AppResult<Vec<crate::media::tmdb::TmdbResult>> {
+    crate::media::tmdb::search(&query, &api_key, limit.unwrap_or(8))
+}
+
+#[tauri::command]
+pub fn tmdb_download_poster(
+    result: crate::media::tmdb::TmdbResult,
+    api_key: String,
+    dest_dir: PathBuf,
+) -> AppResult<PathBuf> {
+    crate::media::tmdb::download_poster(&result, &api_key, &dest_dir)
+}

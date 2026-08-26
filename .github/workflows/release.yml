@@ -17,6 +17,7 @@ jobs:
             args: --target aarch64-apple-darwin --bundles dmg
             artifact: src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/Renamiq_*.dmg
             outname: Renamiq-$V-macos-arm64.dmg
+            apple_signing_identity: "-"
           - platform: ubuntu-22.04
             args: --bundles appimage
             artifact: src-tauri/target/release/bundle/appimage/Renamiq_*.AppImage
@@ -54,6 +55,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Build
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ matrix.settings.apple_signing_identity }}
         run: pnpm tauri build ${{ matrix.settings.args }}
 
       - name: Rename artifact
@@ -66,7 +69,7 @@ jobs:
           mkdir -p release-artifacts
           cp $SRC "release-artifacts/${OUT//'$V'/$version}"
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           name: Renamiq ${{ github.ref_name }}
           files: release-artifacts/*

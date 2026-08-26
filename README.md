@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo/Dark/Renamiq Dark 512.png" alt="Renamiq Logo" width="128" />
+</p>
+
 # Renamiq
 
 **Rename smarter. Organize better.**

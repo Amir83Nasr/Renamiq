@@ -25,10 +25,7 @@ pub fn embed(req: &EmbedRequest) -> AppResult<PathBuf> {
             )));
         }
     }
-    let ext = video
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("mkv");
+    let ext = video.extension().and_then(|e| e.to_str()).unwrap_or("mkv");
     // Matroska handles every subtitle codec; mp4 only accepts mov_text.
     let (container, sub_codec) = match ext.to_ascii_lowercase().as_str() {
         "mp4" | "m4v" | "mov" => ("mp4", "mov_text"),
@@ -81,18 +78,17 @@ pub fn embed(req: &EmbedRequest) -> AppResult<PathBuf> {
 /// `<dir>/<stem><suffix>.<first-available-ext>` that does not clobber
 /// either input; falls back to a random tail when both are taken.
 fn sibling_path(video: &Path, suffix: &str, exts: &[&str]) -> PathBuf {
-    let stem = video.file_stem().and_then(|s| s.to_str()).unwrap_or("video");
+    let stem = video
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("video");
     for ext in exts {
         let candidate = video.with_file_name(format!("{stem}{suffix}.{ext}"));
         if !candidate.exists() {
             return candidate;
         }
     }
-    video.with_file_name(format!(
-        "{stem}{suffix}-{}.{}",
-        std::process::id(),
-        exts[0]
-    ))
+    video.with_file_name(format!("{stem}{suffix}-{}.{}", std::process::id(), exts[0]))
 }
 
 /// Move `from` over `to`, replacing it; cross-device safe via copy fallback.
@@ -115,9 +111,15 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("embed-test-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let v = dir.join("Movie.mkv");
-        assert_eq!(sibling_path(&v, "_subbed", &["mkv", "mp4"]), dir.join("Movie_subbed.mkv"));
+        assert_eq!(
+            sibling_path(&v, "_subbed", &["mkv", "mp4"]),
+            dir.join("Movie_subbed.mkv")
+        );
         std::fs::write(dir.join("Movie_subbed.mkv"), b"x").unwrap();
-        assert_eq!(sibling_path(&v, "_subbed", &["mkv", "mp4"]), dir.join("Movie_subbed.mp4"));
+        assert_eq!(
+            sibling_path(&v, "_subbed", &["mkv", "mp4"]),
+            dir.join("Movie_subbed.mp4")
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

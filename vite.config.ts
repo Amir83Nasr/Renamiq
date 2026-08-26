@@ -8,6 +8,13 @@ const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
+  customLogger: {
+    info: () => {}, // hide "[vite] hmr update ..." startup/HMR chatter
+    warn: console.warn,
+    error: console.error,
+    warnOnce: console.warn,
+    errorOnce: console.error,
+  },
   plugins: [react(), tailwindcss()],
 
   test: {
@@ -16,7 +23,7 @@ export default defineConfig(async () => ({
 
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      "@": path.resolve(import.meta.dirname, "./src"),
     },
   },
 

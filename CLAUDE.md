@@ -19,7 +19,7 @@ Obsession 2026.mkv
 Also organizes files into a clean library structure:
 
 ```text
-TV Shows/
+Series/
 └── Breaking Bad/
     └── Season 01/
         └── Breaking Bad S01 E01.mkv

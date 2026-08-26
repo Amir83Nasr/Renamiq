@@ -96,11 +96,10 @@ fn parse_movie(stem: &str, tokens: &[String], year_idx: usize) -> ParsedMedia {
     let mut out = base(stem, MediaKind::Movie);
     // Year may sit inside a hyphenated token ("Toy-Story-5-2026-DUB").
     let year_token = &tokens[year_idx];
-    let embedded_year = year_token.split('-').find(|seg| {
-        seg.len() == 4 && seg.chars().all(|c| c.is_ascii_digit())
-    });
-    let year_str = embedded_year
-        .unwrap_or(year_token.trim_matches(|c: char| !c.is_ascii_digit()));
+    let embedded_year = year_token
+        .split('-')
+        .find(|seg| seg.len() == 4 && seg.chars().all(|c| c.is_ascii_digit()));
+    let year_str = embedded_year.unwrap_or(year_token.trim_matches(|c: char| !c.is_ascii_digit()));
     out.year = year_str.parse().ok();
     // When the year was embedded, text before it in the same token is
     // title ("Toy-Story-5" ← "Toy-Story-5-2026-DUB").

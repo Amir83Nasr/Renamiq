@@ -10,7 +10,6 @@ import { Switch } from "@/components/ui/switch";
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { SubkadeDialog } from "@/components/workspace/SubkadeDialog";
@@ -57,31 +56,36 @@ export function FileEditor() {
   };
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col gap-4 overflow-y-auto border-s bg-card p-4 xl:w-80">
+    <aside className="flex w-64 shrink-0 basis-56 grow-0 overflow-y-auto border-s bg-card p-2 xl:w-80 xl:basis-72">
       <header className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">{t("editor.title")}</h3>
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setSelected(null)}
-                  aria-label={t("confirm.cancel")}
-                />
-              }
-            >
-              <X className="size-4" />
-            </TooltipTrigger>
-            <TooltipContent>{t("confirm.cancel")}</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setSelected(null)}
+                aria-label={t("confirm.cancel")}
+              />
+            }
+          >
+            <X className="size-4" />
+          </TooltipTrigger>
+          <TooltipContent>{t("confirm.cancel")}</TooltipContent>
+        </Tooltip>
       </header>
 
-      <p className="truncate rounded-md bg-muted px-2 py-1.5 text-xs text-muted-foreground">
-        {item.originalName}
-      </p>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <p className="cursor-default truncate rounded-md bg-muted px-2 py-1.5 text-xs text-muted-foreground" />
+          }
+        >
+          {item.originalName}
+        </TooltipTrigger>
+        <TooltipContent side="bottom">{item.originalName}</TooltipContent>
+      </Tooltip>
 
       {!isSubtitle && (
         <Button variant="outline" size="sm" onClick={() => setSubkade(true)}>

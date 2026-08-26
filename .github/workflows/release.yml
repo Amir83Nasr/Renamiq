@@ -14,9 +14,17 @@ jobs:
       matrix:
         settings:
           - platform: macos-latest
-            args: --target aarch64-apple-darwin
+            args: --target aarch64-apple-darwin --bundles dmg
+            artifact: src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/Renamiq_*.dmg
+            outname: Renamiq-$V-macos-arm64.dmg
           - platform: ubuntu-22.04
+            args: --bundles appimage
+            artifact: src-tauri/target/release/bundle/appimage/Renamiq_*.AppImage
+            outname: Renamiq-$V-linux-x64.AppImage
           - platform: windows-latest
+            args: --bundles nsis
+            artifact: src-tauri/target/release/bundle/nsis/Renamiq_*-setup.exe
+            outname: Renamiq-$V-windows-x64.exe
 
     runs-on: ${{ matrix.settings.platform }}
     steps:
@@ -45,12 +53,22 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - uses: tauri-apps/tauri-action@v0
+      - name: Build
+        run: pnpm tauri build ${{ matrix.settings.args }}
+
+      - name: Rename artifact
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SRC: ${{ matrix.settings.artifact }}
+          OUT: ${{ matrix.settings.outname }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p release-artifacts
+          cp $SRC "release-artifacts/${OUT//'$V'/$version}"
+
+      - uses: softprops/action-gh-release@v2
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Renamiq ${{ github.ref_name }}
-          releaseDraft: false
-          prerelease: false
-          args: ${{ matrix.settings.args }}
+          name: Renamiq ${{ github.ref_name }}
+          files: release-artifacts/*
+          fail_on_unmatched_files: true
+          generate_release_notes: true

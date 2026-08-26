@@ -11,6 +11,9 @@ export const TEMPLATE_VARS = [
   "episode",
   "resolution",
   "codec",
+  "group",
+  "audio",
+  "edition",
 ] as const;
 
 // Representative values so previews read like real output.
@@ -21,6 +24,9 @@ const SAMPLE: Record<(typeof TEMPLATE_VARS)[number], string> = {
   episode: "01",
   resolution: "1080p",
   codec: "x265",
+  group: "NTb",
+  audio: "DDP5.1",
+  edition: "Extended",
 };
 
 /** Live preview; keeps unknown {vars} visible exactly like the backend. */

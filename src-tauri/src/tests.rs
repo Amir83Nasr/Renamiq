@@ -6,7 +6,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use crate::rename::executor;
-use crate::rename::planner::{build_plan, ConflictResolution, FileOverride, PlanRequest};
+use crate::rename::planner::{
+    build_plan, ConflictResolution, FileOverride, PlanRequest, PlanTemplates,
+};
 use crate::scanner::{scan_directory, scan_paths};
 
 fn temp_tree(label: &str) -> PathBuf {
@@ -96,7 +98,12 @@ fn organize_uses_configured_destinations() {
 
     for it in &plan.items {
         if it.kind == MediaKind::Movie {
-            assert_eq!(it.directory, movies.join("Some Movie"), "{}", it.path.display());
+            assert_eq!(
+                it.directory,
+                movies.join("Some Movie"),
+                "{}",
+                it.path.display()
+            );
         } else {
             assert_eq!(
                 it.directory,
@@ -278,6 +285,34 @@ fn movie_ready_flat_rename_in_place() {
     assert_eq!(it.status, ItemStatus::Ready);
     assert_eq!(it.new_name, "Obsession 2026.mkv");
     assert_eq!(it.directory, PathBuf::from("/lib"));
+}
+
+#[test]
+fn multi_episode_renders_range() {
+    let plan = build_plan(&unit_req(vec![video("Show.Name.S01E01E02.720p.mkv")]));
+    let it = &plan.items[0];
+    assert_eq!(it.status, ItemStatus::Ready);
+    assert_eq!(it.new_name, "Show Name S01 E01-E02.mkv");
+}
+
+#[test]
+fn group_template_var_fills_and_missing_leaves_no_gap() {
+    let mut r = unit_req(vec![video("Movie.2019.1080p.x265-NTb.mkv")]);
+    r.templates = Some(PlanTemplates {
+        movie: "{title} {year} {group}".into(),
+        tv: String::new(),
+    });
+    let plan = build_plan(&r);
+    assert_eq!(plan.items[0].new_name, "Movie 2019 NTb.mkv");
+
+    // No release group in the filename → no stray double space.
+    let mut r = unit_req(vec![video("Movie.2019.1080p.mkv")]);
+    r.templates = Some(PlanTemplates {
+        movie: "{title} {year} {group}".into(),
+        tv: String::new(),
+    });
+    let plan = build_plan(&r);
+    assert_eq!(plan.items[0].new_name, "Movie 2019.mkv");
 }
 
 #[test]

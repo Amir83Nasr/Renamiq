@@ -10,11 +10,12 @@ import {
   Tv,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { type MessageKey, t } from "@/i18n";
 import { cn } from "@/lib/utils";
 import { useWorkspace } from "@/stores/workspace";
-import type { ItemStatus, PlanItem } from "@/types/media";
+import type { ConflictResolution, ItemStatus, PlanItem } from "@/types/media";
 
 const STATUS_BADGE: Record<
   ItemStatus,
@@ -37,7 +38,7 @@ const STATUS_ICON: Record<ItemStatus, typeof CircleCheck> = {
 };
 
 export function FileList() {
-  const { plan, selected, setSelected } = useWorkspace();
+  const { plan, selected, setSelected, resolutions } = useWorkspace();
   const items = plan?.items ?? [];
 
   return (
@@ -48,6 +49,7 @@ export function FileList() {
             key={item.path}
             item={item}
             active={selected === item.path}
+            resolution={resolutions[item.path]}
             onClick={() =>
               setSelected(selected === item.path ? null : item.path)
             }
@@ -58,17 +60,30 @@ export function FileList() {
   );
 }
 
+/** On-disk collisions are resolvable; batch duplicates are not. */
+function isResolvable(item: PlanItem, resolution?: ConflictResolution) {
+  return (
+    (item.status === "conflict" && item.warnings.includes("exists")) ||
+    resolution !== undefined
+  );
+}
+
+const RESOLUTIONS: ConflictResolution[] = ["skip", "replace", "suffix"];
+
 function FileRow({
   item,
   active,
+  resolution,
   onClick,
 }: {
   item: PlanItem;
   active: boolean;
+  resolution?: ConflictResolution;
   onClick: () => void;
 }) {
   const badge = STATUS_BADGE[item.status];
   const StatusIcon = STATUS_ICON[item.status];
+  const setResolution = useWorkspace((s) => s.setResolution);
   // Error rows have no proposal (newName is just the extension) — show
   // them unchanged until the editor fills in a valid one.
   const changed =
@@ -77,13 +92,15 @@ function FileRow({
       !item.destination.startsWith(
         item.path.slice(0, item.path.lastIndexOf("/")),
       ));
+  const showResolutions = isResolvable(item, resolution);
 
   return (
     <li className="border-none">
       <button
         type="button"
         className={cn(
-          "block w-full cursor-pointer px-4 py-3 text-start transition-colors",
+          "block w-full cursor-pointer px-4 pb-3 pt-3 text-start transition-colors",
+          showResolutions && "pb-1",
           active ? "bg-accent" : "hover:bg-accent/50",
         )}
         onClick={onClick}
@@ -134,6 +151,23 @@ function FileRow({
           </div>
         </div>
       </button>
+      {showResolutions && (
+        <div className="flex items-center gap-1.5 px-4 pb-3 ps-11">
+          <span className="text-xs text-muted-foreground">
+            {t("resolution.exists")}
+          </span>
+          {RESOLUTIONS.map((r) => (
+            <Button
+              key={r}
+              size="xs"
+              variant={resolution === r ? "default" : "outline"}
+              onClick={() => setResolution(item.path, r === "skip" ? null : r)}
+            >
+              {t(`resolution.${r}` as MessageKey)}
+            </Button>
+          ))}
+        </div>
+      )}
     </li>
   );
 }

@@ -9,8 +9,10 @@ import {
 import { AppSidebar, type PageId } from "@/components/app-sidebar";
 import { SidebarProvider, useSidebar } from "@/components/ui/sidebar";
 import { TitleBar } from "@/components/ui/titlebar";
-import { t } from "@/i18n";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { type MessageKey, t } from "@/i18n";
 import EmbedPage from "@/pages/EmbedPage";
+import HistoryPage from "@/pages/HistoryPage";
 import PostersPage from "@/pages/PostersPage";
 import SettingsPage from "@/pages/SettingsPage";
 import SubkadePage from "@/pages/SubkadePage";
@@ -72,29 +74,44 @@ export default function App() {
       style={{ "--sidebar-width": `${width}px` } as React.CSSProperties}
       className={dragging ? "**:transition-none!" : undefined}
     >
-      <div className="flex h-screen flex-col overflow-hidden bg-background">
-        <TitleBar />
-        <div className="flex min-h-0 flex-1">
-          <AppSidebar page={page} onNavigate={setPage} />
-          {/* ponytail: mouse-only resize handle; add keyboard arrow support if ever needed */}
-          <ResizeHandle
-            onPointerDown={startDrag}
-            onPointerMove={moveDrag}
-            onPointerUp={endDrag}
-            onDoubleClick={() => setWidth(DEFAULT_SIDEBAR_WIDTH)}
-          />
-          <main className="min-w-0 flex-1 overflow-hidden">
-            {page === "workspace" && <WorkspacePage />}
-            {page === "subkade" && <SubkadePage />}
-            {page === "embed" && <EmbedPage />}
-            {page === "posters" && <PostersPage />}
-            {page === "settings" && <SettingsPage />}
-          </main>
-        </div>
+      <div className="flex h-dvh flex-col overflow-hidden bg-background">
+        <TooltipProvider>
+          <TitleBar label={t(PAGE_LABEL[page])} />
+          <div className="flex min-h-0 flex-1">
+            <AppSidebar page={page} onNavigate={setPage} />
+            {/* ponytail: mouse-only resize handle; add keyboard arrow support if ever needed */}
+            <ResizeHandle
+              onPointerDown={startDrag}
+              onPointerMove={moveDrag}
+              onPointerUp={endDrag}
+              onDoubleClick={() => setWidth(DEFAULT_SIDEBAR_WIDTH)}
+            />
+            <main className="min-w-0 flex-1 overflow-hidden">
+              {page === "workspace" && <WorkspacePage />}
+              {page === "subkade" && <SubkadePage />}
+              {page === "embed" && <EmbedPage />}
+              {page === "posters" && <PostersPage />}
+              {page === "history" && <HistoryPage />}
+              {page === "settings" && <SettingsPage />}
+            </main>
+          </div>
+        </TooltipProvider>
       </div>
     </SidebarProvider>
   );
 }
+
+// ── TITLEBAR LABELS ──────────────────────────────────────────
+
+/** Active section name shown centered in the titlebar. */
+const PAGE_LABEL: Record<PageId, MessageKey> = {
+  workspace: "nav.workspace",
+  subkade: "nav.subkade",
+  embed: "nav.embed",
+  posters: "nav.posters",
+  history: "nav.history",
+  settings: "nav.settings",
+};
 
 // ── RESIZE HANDLE ────────────────────────────────────────────
 
@@ -105,9 +122,8 @@ function ResizeHandle(props: React.ComponentProps<"hr">) {
     <hr
       aria-orientation="vertical"
       aria-label={t("sidebar.resize")}
-      title={t("sidebar.resize")}
       {...props}
-      className="z-10 m-0 h-auto w-1 shrink-0 cursor-col-resize rounded-full border-none hover:bg-sidebar-border active:bg-sidebar-border"
+      className="z-10 my-auto h-[calc(100%-1.5rem)] w-1 shrink-0 cursor-col-resize rounded-full border-none bg-border/40 hover:bg-sidebar-border active:bg-sidebar-border"
     />
   );
 }

@@ -11,6 +11,7 @@ export const dictionaries = {
     "nav.subkade": "Subtitles",
     "nav.embed": "Embed Subtitle",
     "nav.posters": "Posters",
+    "nav.history": "History",
     "nav.settings": "Settings",
     "sidebar.resize": "Drag to resize sidebar",
 
@@ -60,7 +61,6 @@ export const dictionaries = {
     "warn.orphanSubtitle": "Matching video is not in the list; won't be moved",
 
     "subkade.title": "Download subtitles from Subkade",
-    "subkade.pageTitle": "Download subtitles",
     "subkade.placeholder": "Movie or show name…",
     "subkade.search": "Search",
     "subkade.empty": "No results found",
@@ -71,7 +71,6 @@ export const dictionaries = {
     "subkade.zipSize": "Archive size: {size}",
     "subkade.download": "Download subtitle",
 
-    "embed.pageTitle": "Embed subtitle into video",
     "embed.pickVideo": "Pick video…",
     "embed.pickSubtitle": "Pick subtitle…",
     "embed.noneSelected": "Nothing selected yet",
@@ -84,7 +83,6 @@ export const dictionaries = {
     "embed.lang.ara": "Arabic",
     "embed.lang.none": "No language",
 
-    "posters.pageTitle": "Movie posters",
     "posters.placeholder": "Movie or show name…",
     "posters.search": "Search",
     "posters.hint": "Search TMDB for the official poster of a movie or show.",
@@ -97,6 +95,7 @@ export const dictionaries = {
     "confirm.title": "Rename {count} files?",
     "confirm.description":
       "Confirming renames the files on disk. This action is reversible.",
+    "confirm.preview": "Preview",
     "confirm.ready": "Ready",
     "confirm.warnings": "Warnings",
     "confirm.errors": "Errors",
@@ -116,6 +115,12 @@ export const dictionaries = {
     "resolution.skip": "Skip",
     "resolution.replace": "Replace",
     "resolution.suffix": "Add suffix",
+    "resolution.applyAll": "Apply to all conflicts",
+
+    "history.empty": "No rename operations yet",
+    "history.items": "{count} files",
+    "history.undo": "Undo",
+    "history.undoDone": "Operation undone",
 
     "settings.templates": "Naming templates",
     "settings.templates.hint": "Click a variable to insert it at the cursor.",
@@ -131,10 +136,6 @@ export const dictionaries = {
     "settings.folders.pick": "Pick…",
     "settings.folders.clear": "Clear",
     "settings.folders.default": "Default: inside the scanned folder",
-    "settings.tmdb": "TMDB (posters)",
-    "settings.tmdb.hint":
-      "Free API key from themoviedb.org — required for the Posters page.",
-    "settings.tmdb.keyLabel": "API key",
     "settings.language": "Language",
 
     "error.generic": "Something went wrong. Please try again.",

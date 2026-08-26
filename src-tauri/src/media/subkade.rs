@@ -32,7 +32,9 @@ fn http() -> AppResult<reqwest::blocking::Client> {
 
 /// GET on the dl host requires a same-site Referer or it answers 403.
 fn dl_request(client: &reqwest::blocking::Client, url: &str) -> reqwest::blocking::RequestBuilder {
-    client.get(url).header(reqwest::header::REFERER, format!("{SITE}/"))
+    client
+        .get(url)
+        .header(reqwest::header::REFERER, format!("{SITE}/"))
 }
 
 /// Search the site's HTML endpoint (`/?s=query`) — the WP REST API rejects
@@ -61,9 +63,7 @@ pub fn search(query: &str, limit: u8) -> AppResult<Vec<SubkadeResult>> {
             break;
         };
         // href sits before the class attribute inside the same <a …>.
-        let tag_start = rest[..anchor_start]
-            .rfind("<a ")
-            .unwrap_or(anchor_start);
+        let tag_start = rest[..anchor_start].rfind("<a ").unwrap_or(anchor_start);
         let href = rest[tag_start..anchor_start]
             .split("href=\"")
             .nth(1)
@@ -161,7 +161,10 @@ pub fn zip_size(zip_url: &str) -> AppResult<u64> {
 
 /// Download the zip and extract subtitle files next to `video_path`.
 /// Returns extracted file paths.
-pub fn download_and_extract(zip_url: &str, video_path: &std::path::Path) -> AppResult<Vec<std::path::PathBuf>> {
+pub fn download_and_extract(
+    zip_url: &str,
+    video_path: &std::path::Path,
+) -> AppResult<Vec<std::path::PathBuf>> {
     let dest_dir = video_path
         .parent()
         .ok_or_else(|| RenamiqError::user("Video has no parent folder"))?;
@@ -169,7 +172,10 @@ pub fn download_and_extract(zip_url: &str, video_path: &std::path::Path) -> AppR
 }
 
 /// Download the zip and extract subtitle files into `dest_dir` directly.
-pub fn download_to_dir(zip_url: &str, dest_dir: &std::path::Path) -> AppResult<Vec<std::path::PathBuf>> {
+pub fn download_to_dir(
+    zip_url: &str,
+    dest_dir: &std::path::Path,
+) -> AppResult<Vec<std::path::PathBuf>> {
     if !zip_url.starts_with("https://") || !zip_url.contains(DL_HOST) {
         return Err(RenamiqError::user("Unexpected download host"));
     }
@@ -242,9 +248,11 @@ pub fn utf8_percent_encode_pub(s: &str) -> String {
 
 fn utf8_percent_encode(s: &str) -> String {
     s.bytes()
-        .map(|b| match b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~') {
-            true => (b as char).to_string(),
-            false => format!("%{b:02X}"),
-        })
+        .map(
+            |b| match b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'~') {
+                true => (b as char).to_string(),
+                false => format!("%{b:02X}"),
+            },
+        )
         .collect()
 }

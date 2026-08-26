@@ -1,7 +1,7 @@
 {
   "name": "renamiq",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "packageManager": "pnpm@11.21.0",
   "type": "module",
   "scripts": {
@@ -38,12 +38,12 @@
     "@types/node": "^26.2.0",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
-    "@vitejs/plugin-react": "^4.6.0",
+    "@vitejs/plugin-react": "^6.1.0",
     "jsdom": "^30.0.1",
     "lefthook": "^2.1.10",
     "shadcn": "^4.19.0",
     "typescript": "~5.8.3",
-    "vite": "^7.0.4",
+    "vite": "^8.2.2",
     "vitest": "^4.1.11"
   }
 }

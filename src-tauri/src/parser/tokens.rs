@@ -242,14 +242,11 @@ pub fn find_year_marker(tokens: &[String]) -> Option<usize> {
         }
         // Hyphenated token with an embedded delimited segment: "-2026-" or
         // leading/trailing dash around the digits.
-        t.split('-')
-            .any(|seg| {
-                seg.len() == 4
-                    && seg.chars().all(|c| c.is_ascii_digit())
-                    && seg
-                        .parse::<u16>()
-                        .is_ok_and(|y| (1900..=2100).contains(&y))
-            })
+        t.split('-').any(|seg| {
+            seg.len() == 4
+                && seg.chars().all(|c| c.is_ascii_digit())
+                && seg.parse::<u16>().is_ok_and(|y| (1900..=2100).contains(&y))
+        })
     })
 }
 

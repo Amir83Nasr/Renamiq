@@ -150,7 +150,7 @@ fn scan_recursive(dir: &Path, out: &mut Vec<ScannedFile>, depth: usize) -> std::
     let mut entries: Vec<std::fs::DirEntry> = match std::fs::read_dir(dir) {
         Ok(rd) => rd.filter_map(Result::ok).collect(),
         Err(err) => {
-            eprintln!("[renamiq] skipping unreadable dir {}: {err}", dir.display());
+            log::warn!("skipping unreadable dir {}: {err}", dir.display());
             return Ok(());
         }
     };
@@ -197,7 +197,7 @@ fn scan_recursive(dir: &Path, out: &mut Vec<ScannedFile>, depth: usize) -> std::
     Ok(())
 }
 
-/// "Movie.fa.srt" → Some("fa"); "Movie.srt" → Persian default (see languages).
+/// "Movie.fa.srt" → Some("fa"); untagged "Movie.srt" → None.
 pub fn extract_subtitle_language(filename: &str) -> Option<String> {
     let stem = filename.rsplit_once('.').map_or(filename, |(s, _)| s);
     let token = stem.rsplit(['.', '_', ' ', '-']).next();

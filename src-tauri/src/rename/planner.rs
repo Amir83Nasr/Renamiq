@@ -144,11 +144,23 @@ struct EffectiveMeta {
     year: Option<u16>,
     season: Option<u8>,
     episode: Option<u8>,
+    /// Extra episodes for multi-episode files (S01E01E02 → [1, 2, 3]).
+    /// Dropped when the user overrides the episode number manually.
+    episodes: Option<Vec<u8>>,
     resolution: Option<String>,
     codec: Option<String>,
+    audio: Option<String>,
+    group: Option<String>,
+    edition: Option<String>,
 }
 
 fn effective(parsed: &ParsedMedia, ovr: &FileOverride) -> EffectiveMeta {
+    // A manual episode fix makes the parsed multi-episode range stale.
+    let episodes = if ovr.episode.is_some() {
+        None
+    } else {
+        parsed.episodes.clone()
+    };
     EffectiveMeta {
         kind: ovr.kind.unwrap_or(parsed.kind),
         title: ovr
@@ -160,8 +172,12 @@ fn effective(parsed: &ParsedMedia, ovr: &FileOverride) -> EffectiveMeta {
         year: ovr.year.or(parsed.year),
         season: ovr.season.or(parsed.season),
         episode: ovr.episode.or(parsed.episode),
+        episodes,
         resolution: parsed.resolution.clone(),
         codec: parsed.codec.clone(),
+        audio: parsed.audio.clone(),
+        group: parsed.group.clone(),
+        edition: parsed.edition.clone(),
     }
 }
 
@@ -183,9 +199,7 @@ pub fn build_plan(req: &PlanRequest) -> RenamePlan {
         let item = build_item(req, file, &ovr);
         // Correctly named AND healthy → nothing to do, drop from the plan.
         // Error items stay visible so the editor can fix them manually.
-        if item.status != ItemStatus::Error
-            && norm_key(&item.destination) == norm_key(&item.path)
-        {
+        if item.status != ItemStatus::Error && norm_key(&item.destination) == norm_key(&item.path) {
             continue;
         }
         items.push(item);
@@ -460,13 +474,13 @@ fn render_stem(kind: MediaKind, m: &EffectiveMeta, tpl: Option<&PlanTemplates>) 
         year: m.year,
         season: m.season,
         episode: m.episode,
-        episodes: None,
+        episodes: m.episodes.clone(),
         resolution: m.resolution.clone(),
         codec: m.codec.clone(),
-        audio: None,
+        audio: m.audio.clone(),
         language: None,
-        group: None,
-        edition: None,
+        group: m.group.clone(),
+        edition: m.edition.clone(),
         low_confidence: false,
     };
     let default = PlanTemplates::default();
@@ -486,7 +500,16 @@ fn render_stem(kind: MediaKind, m: &EffectiveMeta, tpl: Option<&PlanTemplates>) 
             }
         }),
     };
-    render_template(t, &parsed)
+    let mut stem = render_template(t, &parsed);
+    // Multi-episode: "Show Name S01 E01" + episodes [1, 2, 3] → "... E01-E02-E03".
+    if kind == MediaKind::Tv {
+        if let Some(last) = m.episodes.as_ref().and_then(|e| e.last()) {
+            if Some(*last) != parsed.episode {
+                stem = format!("{stem}-E{last:0>2}");
+            }
+        }
+    }
+    stem
 }
 
 /// Destination directory: source's parent when flat; Movies/TV Shows tree
@@ -517,13 +540,11 @@ fn directory_for(
         .unwrap_or_else(|| req.root.join("TV Shows"));
     match kind {
         MediaKind::Movie => movie_root.join(sanitize_filename(title)),
-        MediaKind::Tv => tv_root
-            .join(sanitize_filename(title))
-            .join(
-                season
-                    .map(|s| format!("Season {s:02}"))
-                    .unwrap_or_else(|| "Season 01".into()),
-            ),
+        MediaKind::Tv => tv_root.join(sanitize_filename(title)).join(
+            season
+                .map(|s| format!("Season {s:02}"))
+                .unwrap_or_else(|| "Season 01".into()),
+        ),
         MediaKind::Unknown => flat,
     }
 }

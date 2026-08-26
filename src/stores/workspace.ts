@@ -42,11 +42,17 @@ interface WorkspaceState {
   loadSettings: () => Promise<void>;
 
   importPaths: (paths: string[], folderMode: boolean) => Promise<void>;
+  /** Re-scan the current selection; keeps overrides and resolutions. */
+  rescan: () => Promise<void>;
+  /** Shared tail of every scan: filter media, flip to review, replan. */
+  applyScan: (res: ScanResult) => void;
   setOrganize: (v: boolean) => void;
   setSelected: (path: string | null) => void;
   setOverride: (path: string, ovr: FileOverride) => void;
   clearOverride: (path: string) => void;
   setResolution: (path: string, r: ConflictResolution | null) => void;
+  /** Set one resolution on every resolvable conflict in one replan. */
+  applyResolutionToAll: (r: ConflictResolution | "clear") => void;
   clearAll: () => void;
   /** Rebuild the plan from current state. Debounced + race-guarded. */
   replan: () => void;
@@ -106,17 +112,40 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
         : scanPaths(paths));
       set({
         root: folderMode ? paths[0] : parentOf(paths[0]),
-        files: res.files.filter(
-          (f) => f.role === "video" || f.role === "subtitle",
-        ),
-        phase: "review",
-        scanning: false,
       });
-      get().replan();
+      get().applyScan(res);
     } catch (err) {
       console.error(err);
       set({ error: String(err), scanning: false });
     }
+  },
+
+  async rescan() {
+    const { files } = get();
+    if (files.length === 0) return;
+    // Re-scan the current selection, not root: loose imports would widen
+    // scope to the whole parent folder. Stale overrides/resolutions for
+    // vanished paths are harmless (planner lookups just miss).
+    set({ scanning: true, error: null });
+    try {
+      const res: ScanResult = await scanPaths(files.map((f) => f.path));
+      get().applyScan(res);
+    } catch (err) {
+      console.error(err);
+      set({ error: String(err), scanning: false });
+    }
+  },
+
+  /** Shared tail of every scan: filter media, flip to review, replan. */
+  applyScan(res: ScanResult) {
+    set({
+      files: res.files.filter(
+        (f) => f.role === "video" || f.role === "subtitle",
+      ),
+      phase: "review",
+      scanning: false,
+    });
+    get().replan();
   },
 
   setOrganize(organize) {
@@ -149,6 +178,27 @@ export const useWorkspace = create<WorkspaceState>((set, get) => ({
       const next = { ...s.resolutions };
       if (resolution === null) delete next[path];
       else next[path] = resolution;
+      return { resolutions: next };
+    });
+    get().replan();
+  },
+
+  applyResolutionToAll(resolution) {
+    const { plan, resolutions } = get();
+    const items = plan?.items ?? [];
+    // Only on-disk collisions are resolvable; batch duplicates are not.
+    const targets = items.filter(
+      (item) =>
+        (item.status === "conflict" && item.warnings.includes("exists")) ||
+        (resolution !== "clear" && resolutions[item.path] !== undefined),
+    );
+    if (targets.length === 0) return;
+    set((s) => {
+      const next = { ...s.resolutions };
+      for (const item of targets) {
+        if (resolution === "clear") delete next[item.path];
+        else next[item.path] = resolution;
+      }
       return { resolutions: next };
     });
     get().replan();

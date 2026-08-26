@@ -4,6 +4,11 @@ import { Captions, Download, FolderOpen, Loader2, Search } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { t } from "@/i18n";
 import {
   pickFolder,
@@ -70,14 +75,9 @@ export default function SubkadePage() {
   };
 
   return (
-    <div className="flex h-full w-full flex-col gap-4 overflow-y-auto p-6">
-      <header className="sticky top-0 z-10 -mx-6 flex items-center gap-2 bg-background px-6 pb-3 pt-1">
-        <Captions className="size-4 text-primary" />
-        <h2 className="text-sm font-semibold">{t("subkade.pageTitle")}</h2>
-      </header>
-
+    <div className="flex h-full w-full flex-col gap-4 overflow-y-auto p-2">
       <form
-        className="flex gap-2"
+        className="flex items-center gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           void runSearch();
@@ -89,7 +89,12 @@ export default function SubkadePage() {
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t("subkade.placeholder")}
         />
-        <Button type="submit" size="sm" disabled={searching || !query.trim()}>
+        <Button
+          type="submit"
+          size="sm"
+          className="shrink-0"
+          disabled={searching || !query.trim()}
+        >
           {searching ? <Loader2 className="animate-spin" /> : <Search />}
           {t("subkade.search")}
         </Button>
@@ -104,9 +109,25 @@ export default function SubkadePage() {
         >
           <FolderOpen /> {t("settings.folders.pick")}
         </Button>
-        <span dir="ltr" className="truncate text-xs text-muted-foreground">
-          {destDir ?? t("settings.folders.default")}
-        </span>
+        {destDir ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span
+                  dir="ltr"
+                  className="cursor-default truncate text-xs text-muted-foreground"
+                />
+              }
+            >
+              {destDir}
+            </TooltipTrigger>
+            <TooltipContent>{destDir}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <span dir="ltr" className="truncate text-xs text-muted-foreground">
+            {t("settings.folders.default")}
+          </span>
+        )}
       </div>
 
       {error && (

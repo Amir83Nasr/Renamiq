@@ -1,10 +1,14 @@
 // ── SETTINGS ─────────────────────────────────────────────────
 
-import { Settings as SettingsIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { t } from "@/i18n";
 import { getSettings, pickFolder, setSetting } from "@/lib/tauri";
 import { renderTemplatePreview, TEMPLATE_VARS } from "@/lib/templates";
@@ -19,8 +23,6 @@ export default function SettingsPage() {
   // Destination folders: loaded once, changed via folder picker.
   const [destMovie, setDestMovie] = useState("");
   const [destTv, setDestTv] = useState("");
-  // TMDB API key for the posters page.
-  const [tmdbKey, setTmdbKey] = useState("");
   // Which template the var chips insert into.
   const lastFocused = useRef<"movie" | "tv">("movie");
 
@@ -56,7 +58,6 @@ export default function SettingsPage() {
         setTvTpl(s["templates.tv"] || DEFAULT_TV_TPL);
         setDestMovie(s["folders.movie"] || "");
         setDestTv(s["folders.tv"] || "");
-        setTmdbKey(s["tmdb.api_key"] || "");
       })
       .catch(console.error);
     return () => {
@@ -84,12 +85,7 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex h-full w-full flex-col gap-4 overflow-y-auto p-6">
-      <header className="sticky top-0 z-10 -mx-6 flex items-center gap-2 bg-background px-6 pb-3 pt-1">
-        <SettingsIcon className="size-4 text-primary" />
-        <h2 className="text-sm font-semibold">{t("nav.settings")}</h2>
-      </header>
-
+    <div className="flex h-full w-full flex-col gap-4 overflow-y-auto p-2">
       <section className="space-y-3 rounded-2xl border bg-card p-4">
         <div className="space-y-2">
           <h2 className="text-sm font-bold">{t("settings.templates")}</h2>
@@ -143,17 +139,14 @@ export default function SettingsPage() {
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="dest-movie">{t("settings.folders.movieLabel")}</Label>
-          <div className="flex flex-wrap gap-2">
-            <Input
-              id="dest-movie"
-              dir="ltr"
-              readOnly
-              value={destMovie}
-              placeholder={t("settings.folders.default")}
-            />
+          <div className="flex gap-2">
+            <div className="min-w-0 flex-1">
+              <PathInput id="dest-movie" value={destMovie} />
+            </div>
             <Button
               type="button"
               variant="outline"
+              className="shrink-0"
               onClick={() => chooseFolder("folders.movie")}
             >
               {t("settings.folders.pick")}
@@ -171,17 +164,14 @@ export default function SettingsPage() {
         </div>
         <div className="space-y-1.5">
           <Label htmlFor="dest-tv">{t("settings.folders.tvLabel")}</Label>
-          <div className="flex flex-wrap gap-2">
-            <Input
-              id="dest-tv"
-              dir="ltr"
-              readOnly
-              value={destTv}
-              placeholder={t("settings.folders.default")}
-            />
+          <div className="flex gap-2">
+            <div className="min-w-0 flex-1">
+              <PathInput id="dest-tv" value={destTv} />
+            </div>
             <Button
               type="button"
               variant="outline"
+              className="shrink-0"
               onClick={() => chooseFolder("folders.tv")}
             >
               {t("settings.folders.pick")}
@@ -198,28 +188,21 @@ export default function SettingsPage() {
           </div>
         </div>
       </section>
-
-      <section className="space-y-3 rounded-2xl border bg-card p-4">
-        <div className="space-y-1">
-          <h2 className="text-sm font-bold">{t("settings.tmdb")}</h2>
-          <p className="text-xs text-muted-foreground">
-            {t("settings.tmdb.hint")}
-          </p>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="tmdb-key">{t("settings.tmdb.keyLabel")}</Label>
-          <Input
-            id="tmdb-key"
-            dir="ltr"
-            type="password"
-            value={tmdbKey}
-            placeholder="—"
-            onChange={(e) => setTmdbKey(e.target.value)}
-            onBlur={() => saveTemplate("tmdb.api_key", tmdbKey.trim())}
-          />
-        </div>
-      </section>
     </div>
+  );
+}
+
+/** Read-only folder path; full path on hover when truncated. */
+function PathInput({ id, value }: { id: string; value: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <Input id={id} dir="ltr" readOnly value={value} className="min-w-0" />
+        }
+      />
+      <TooltipContent>{value}</TooltipContent>
+    </Tooltip>
   );
 }
 

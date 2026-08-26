@@ -1,6 +1,8 @@
 //! Naming templates: `{title} {year}` → "Obsession 2026".
 //! Supported variables: title, year, season, episode, resolution, codec,
-//! language. `{season:02}` pads to 2 digits.
+//! language, group, audio, edition. `{season:02}` pads to 2 digits.
+//! Variables that are missing render as empty; surrounding whitespace
+//! runs are collapsed so no double spaces remain.
 
 use crate::parser::{MediaKind, ParsedMedia};
 
@@ -43,6 +45,9 @@ fn variable_value(var: &str, p: &ParsedMedia) -> String {
         "resolution" => p.resolution.clone().unwrap_or_default(),
         "codec" => p.codec.clone().unwrap_or_default(),
         "language" => p.language.clone().unwrap_or_default(),
+        "group" => p.group.clone().unwrap_or_default(),
+        "audio" => p.audio.clone().unwrap_or_default(),
+        "edition" => p.edition.clone().unwrap_or_default(),
         _ => return format!("{{{var}}}"), // keep unknown vars visible
     };
     if pad > 0 && !raw.is_empty() {
@@ -53,6 +58,7 @@ fn variable_value(var: &str, p: &ParsedMedia) -> String {
 }
 
 /// Strip characters illegal in filenames across macOS/Windows/Linux.
+/// Collapses whitespace runs so a missing optional variable leaves no gap.
 pub fn sanitize_filename(name: &str) -> String {
     let cleaned: String = name
         .chars()
@@ -62,7 +68,7 @@ pub fn sanitize_filename(name: &str) -> String {
             c => c,
         })
         .collect();
-    cleaned.trim().to_string()
+    cleaned.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// Default templates per media kind (configurable later via settings).
@@ -133,5 +139,26 @@ mod tests {
         p.title = "Movie: The Reckoning?".into();
         assert!(!render_template("{title}", &p).contains(':'));
         assert!(!render_template("{title}", &p).contains('?'));
+    }
+
+    #[test]
+    fn optional_vars_fill() {
+        let mut p = tv_parsed();
+        p.group = Some("NTb".into());
+        p.audio = Some("DDP5.1".into());
+        assert_eq!(
+            render_template("{title} {audio} {group}", &p),
+            "Breaking Bad DDP5.1 NTb"
+        );
+    }
+
+    #[test]
+    fn missing_optional_var_leaves_no_double_space() {
+        let p = tv_parsed();
+        assert_eq!(p.group, None);
+        assert_eq!(
+            render_template("{title} {group} 2026", &p),
+            "Breaking Bad 2026"
+        );
     }
 }

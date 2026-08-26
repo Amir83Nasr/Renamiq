@@ -5,6 +5,11 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { t } from "@/i18n";
 import { embedSubtitle, pickFiles } from "@/lib/tauri";
 
@@ -57,35 +62,62 @@ export default function EmbedPage() {
   };
 
   return (
-    <div className="flex h-full w-full flex-col gap-4 overflow-y-auto p-6">
-      <header className="sticky top-0 z-10 -mx-6 flex items-center gap-2 bg-background px-6 pb-3 pt-1">
-        <PackagePlus className="size-4 text-primary" />
-        <h2 className="text-sm font-semibold">{t("embed.pageTitle")}</h2>
-      </header>
-
+    <div className="flex h-full w-full flex-col gap-4 overflow-y-auto p-2">
       {/* Video picker */}
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         <Button variant="outline" size="sm" onClick={() => void pickVideo()}>
           <FileVideo /> {t("embed.pickVideo")}
         </Button>
-        <span dir="ltr" className="truncate text-xs text-muted-foreground">
-          {video ?? t("embed.noneSelected")}
-        </span>
+        {video ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span
+                  dir="ltr"
+                  className="cursor-default truncate text-xs text-muted-foreground"
+                />
+              }
+            >
+              {video}
+            </TooltipTrigger>
+            <TooltipContent>{video}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <span dir="ltr" className="text-xs text-muted-foreground">
+            {t("embed.noneSelected")}
+          </span>
+        )}
       </div>
 
       {/* Subtitle picker */}
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 items-center gap-2">
         <Button variant="outline" size="sm" onClick={() => void pickSubtitle()}>
           <Captions /> {t("embed.pickSubtitle")}
         </Button>
-        <span dir="auto" className="truncate text-xs text-muted-foreground">
-          {subtitle ?? t("embed.noneSelected")}
-        </span>
+        {subtitle ? (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span
+                  dir="auto"
+                  className="cursor-default truncate text-xs text-muted-foreground"
+                />
+              }
+            >
+              {subtitle}
+            </TooltipTrigger>
+            <TooltipContent>{subtitle}</TooltipContent>
+          </Tooltip>
+        ) : (
+          <span dir="auto" className="text-xs text-muted-foreground">
+            {t("embed.noneSelected")}
+          </span>
+        )}
       </div>
 
       {/* Language + run */}
       <div className="flex items-end gap-2">
-        <div className="grid w-40 gap-1.5">
+        <div className="grid w-40 shrink-0 gap-1.5">
           <Label htmlFor="embed-lang">{t("subtitle.language")}</Label>
           <Select
             id="embed-lang"
@@ -101,6 +133,7 @@ export default function EmbedPage() {
         </div>
         <Button
           size="sm"
+          className="shrink-0"
           disabled={busy || !video || !subtitle}
           onClick={() => void embed()}
         >

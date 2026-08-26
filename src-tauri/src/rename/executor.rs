@@ -83,7 +83,7 @@ trait WithSource {
 }
 impl WithSource for OpResult {
     fn with_source(mut self, err: std::io::Error) -> OpResult {
-        eprintln!("[renamiq] rename failed: {err}");
+        log::warn!("rename failed: {err}");
         self.error = Some("Unable to rename this file.".into());
         self
     }

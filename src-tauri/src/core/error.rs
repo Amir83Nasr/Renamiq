@@ -38,14 +38,14 @@ pub struct ErrorPayload {
 
 impl From<RenamiqError> for ErrorPayload {
     fn from(err: RenamiqError) -> Self {
-        // Technical detail (error chain) goes to stderr for debugging logs.
+        // Technical detail (error chain) goes to the log, not to the user.
         // std::error::Error::source is brought in by thiserror's impl.
         use std::error::Error as _;
         if let Some(source) = err.source() {
-            eprintln!("[renamiq] cause: {source}");
+            log::warn!("cause: {source}");
             let mut src = source.source();
             while let Some(s) = src {
-                eprintln!("[renamiq] caused by: {s}");
+                log::warn!("caused by: {s}");
                 src = s.source();
             }
         }

@@ -5,7 +5,7 @@ SHELL := /bin/bash
 
 .DEFAULT_GOAL := help
 
-.PHONY: install hooks dev tauri build app preview bundle bundle-mac bundle-linux bundle-windows lint format fix typecheck test check rust clean help
+.PHONY: install hooks dev tauri build app preview bundle bundle-mac bundle-linux bundle-windows lint format fix typecheck test check rust clean generate-test-media help
 
 define LOGO
 ██████╗ ███████╗███╗   ██╗ █████╗ ███╗   ███╗██╗  ██████╗
@@ -50,17 +50,17 @@ preview: ## Preview frontend production build
 # ─── Distribution ─────────────────────────────────────────────────────────────
 # Cross-compiling from mac needs extra toolchain; CI runner on target OS is safer.
 # Output lands in src-tauri/target/release/bundle/.
-bundle: ## Bundle for current OS (Tauri)
+bundle: ## Bundle current OS target (Tauri, config-defined targets)
 	@pnpm tauri build && echo "  ✓ Bundled"
 
-bundle-mac: ## Bundle macOS .app/.dmg (Apple Silicon)
-	@pnpm tauri build --target aarch64-apple-darwin && echo "  ✓ macOS (arm64) bundled"
+bundle-mac: ## Bundle macOS .dmg (Apple Silicon)
+	@pnpm tauri build --target aarch64-apple-darwin --bundles dmg && echo "  ✓ macOS (arm64) bundled"
 
-bundle-linux: ## Bundle Linux (.deb/.rpm/AppImage)
-	@pnpm tauri build --target x86_64-unknown-linux-gnu && echo "  ✓ Linux bundled"
+bundle-linux: ## Bundle Linux AppImage
+	@pnpm tauri build --bundles appimage && echo "  ✓ Linux (AppImage) bundled"
 
-bundle-windows: ## Bundle Windows installer (.msi/.nsis)
-	@pnpm tauri build --target x86_64-pc-windows-msvc && echo "  ✓ Windows bundled"
+bundle-windows: ## Bundle Windows installer (.exe NSIS)
+	@pnpm tauri build --bundles nsis && echo "  ✓ Windows (NSIS) bundled"
 
 # ─── Quality ──────────────────────────────────────────────────────────────────
 lint: ## Lint (Biome check)

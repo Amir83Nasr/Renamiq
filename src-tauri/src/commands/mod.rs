@@ -190,11 +190,7 @@ pub fn get_settings(db: State<'_, Db>) -> AppResult<HashMap<String, String>> {
 
 /// Upsert one setting. Values are plain strings; the frontend owns schemas.
 #[tauri::command]
-pub fn set_setting(
-    key: String,
-    value: String,
-    db: State<'_, Db>,
-) -> AppResult<()> {
+pub fn set_setting(key: String, value: String, db: State<'_, Db>) -> AppResult<()> {
     if key.is_empty() {
         return Err(RenamiqError::user("Setting key is empty"));
     }
@@ -213,7 +209,10 @@ pub fn set_setting(
 // ── SUBKADE (SUBTITLE DOWNLOAD) ──────────────────────────────
 
 #[tauri::command]
-pub fn subkade_search(query: String, limit: Option<u8>) -> AppResult<Vec<crate::media::subkade::SubkadeResult>> {
+pub fn subkade_search(
+    query: String,
+    limit: Option<u8>,
+) -> AppResult<Vec<crate::media::subkade::SubkadeResult>> {
     // Blocking HTTP in a command thread; Tauri spawns commands off the main thread.
     crate::media::subkade::search(&query, limit.unwrap_or(8))
 }

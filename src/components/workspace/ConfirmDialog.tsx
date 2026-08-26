@@ -1,8 +1,17 @@
 // ── FINAL CONFIRMATION DIALOG ────────────────────────────────
-// Last gate before filesystem mutation: counts + unresolved-conflict notice.
+// Last gate before filesystem mutation: counts + old→new preview list.
 
-import { AlertTriangle } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { AlertTriangle, ArrowRight } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { t } from "@/i18n";
 import { statusCounts, useWorkspace } from "@/stores/workspace";
 
@@ -16,29 +25,25 @@ export function ConfirmDialog({
   onCancel: () => void;
 }) {
   const { plan, planning } = useWorkspace();
-  if (!open || !plan) return null;
-
-  const counts = statusCounts(plan.items);
+  const items = plan?.items ?? [];
   // Executable = ready items; needs-review and conflicts stay untouched.
-  const executable = plan.items.filter((i) => i.status === "ready").length;
-  if (executable === 0) return null;
+  const executable = items.filter((i) => i.status === "ready");
+  const counts = statusCounts(items);
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6 backdrop-blur-sm"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="confirm-title"
+    <AlertDialog
+      open={open && executable.length > 0}
+      onOpenChange={(o) => !o && onCancel()}
     >
-      <div className="w-full max-w-sm space-y-4 rounded-2xl border bg-card p-5 shadow-xl">
-        <div className="space-y-1">
-          <h2 id="confirm-title" className="text-base font-bold">
-            {t("confirm.title", { count: executable })}
-          </h2>
-          <p className="text-sm leading-relaxed text-muted-foreground">
+      <AlertDialogContent size="default" className="max-w-xl!">
+        <AlertDialogHeader>
+          <AlertDialogTitle>
+            {t("confirm.title", { count: executable.length })}
+          </AlertDialogTitle>
+          <AlertDialogDescription>
             {t("confirm.description")}
-          </p>
-        </div>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
 
         <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-xl bg-muted/60 p-3 text-sm">
           <Row
@@ -63,6 +68,29 @@ export function ConfirmDialog({
           />
         </dl>
 
+        {/* Old → new preview for everything about to run. */}
+        <div className="space-y-1.5">
+          <p className="text-xs font-semibold text-muted-foreground">
+            {t("confirm.preview")}
+          </p>
+          <ul
+            className="max-h-48 space-y-1 overflow-y-auto rounded-lg border bg-card p-2"
+            dir="ltr"
+          >
+            {executable.map((i) => (
+              <li key={i.path} className="flex items-center gap-2 px-1 py-0.5">
+                <span className="truncate text-xs text-muted-foreground line-through">
+                  {i.originalName}
+                </span>
+                <ArrowRight className="size-3 shrink-0 text-muted-foreground/60" />
+                <span className="truncate text-xs font-semibold">
+                  {i.newName}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
         {counts.conflict > 0 && (
           <p className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 p-2.5 text-xs text-warning">
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
@@ -70,16 +98,16 @@ export function ConfirmDialog({
           </p>
         )}
 
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={onCancel}>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onCancel}>
             {t("confirm.cancel")}
-          </Button>
-          <Button onClick={onConfirm} disabled={planning}>
+          </AlertDialogCancel>
+          <AlertDialogAction onClick={onConfirm} disabled={planning}>
             {t("confirm.rename")}
-          </Button>
-        </div>
-      </div>
-    </div>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }
 

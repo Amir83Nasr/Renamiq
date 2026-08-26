@@ -15,4 +15,8 @@ describe("renderTemplatePreview", () => {
   it("keeps unknown vars visible", () => {
     expect(renderTemplatePreview("{title} {bogus}")).toBe("Obsession {bogus}");
   });
+
+  it("fills new optional vars", () => {
+    expect(renderTemplatePreview("{title} {group}")).toBe("Obsession NTb");
+  });
 });

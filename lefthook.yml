@@ -19,3 +19,12 @@ pre-push:
       skip: &skipIfNoTestFiles
         - ref: main
       run: pnpm exec vitest run --silent=passed-only
+
+    cargo-fmt:
+      run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+
+    cargo-clippy:
+      run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+    cargo-test:
+      run: cargo test --manifest-path src-tauri/Cargo.toml

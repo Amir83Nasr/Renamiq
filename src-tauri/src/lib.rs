@@ -45,7 +45,8 @@ pub fn run() {
                     #[allow(unexpected_cfgs)]
                     unsafe {
                         use objc::*;
-                        let ns_app: *mut objc::runtime::Object = msg_send![class!(NSApplication), sharedApplication];
+                        let ns_app: *mut objc::runtime::Object =
+                            msg_send![class!(NSApplication), sharedApplication];
                         let _: () = msg_send![ns_app, hide: std::ptr::null_mut::<()>()];
                         let _: () = msg_send![ns_app, unhideWithoutActivation];
                     }

@@ -194,10 +194,7 @@ pub fn download_to_dir(
 
     // Stream the zip to a sibling temp file so we can rewind for the archive
     // reader. The temp file is removed whether extraction succeeds or fails.
-    let temp = std::env::temp_dir().join(format!(
-        "renamiq-subkade-{}.zip",
-        std::process::id()
-    ));
+    let temp = std::env::temp_dir().join(format!("renamiq-subkade-{}.zip", std::process::id()));
     let mut file = std::fs::File::create(&temp)
         .map_err(|e| RenamiqError::with_source("Could not write subtitle", e))?;
     let mut downloaded: u64 = 0;

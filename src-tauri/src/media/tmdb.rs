@@ -54,7 +54,10 @@ pub fn search(query: &str, _api_key: &str, limit: u8) -> AppResult<Vec<TmdbResul
     }
     let first_char = query.chars().next().unwrap_or('a').to_ascii_lowercase();
     let enc = crate::media::subkade::utf8_percent_encode_pub(query);
-    let url = format!("https://v2.sg.media-imdb.com/suggestion/{}/{}.json", first_char, enc);
+    let url = format!(
+        "https://v2.sg.media-imdb.com/suggestion/{}/{}.json",
+        first_char, enc
+    );
 
     let client = http()?;
     let resp = client.get(&url).send();

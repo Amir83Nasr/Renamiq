@@ -88,6 +88,12 @@ fn record_operation(db: &State<'_, Db>, kind: &str, journal: &[JournalEntry]) ->
     Ok(())
 }
 
+#[tauri::command]
+pub fn remove_subtitle(video: String) -> AppResult<String> {
+    let path = std::path::PathBuf::from(&video);
+    crate::media::remove_subs::remove_subtitles(&path).map(|p| p.to_string_lossy().into_owned())
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OperationHistoryItem {
@@ -209,64 +215,141 @@ pub fn set_setting(key: String, value: String, db: State<'_, Db>) -> AppResult<(
 // ── SUBKADE (SUBTITLE DOWNLOAD) ──────────────────────────────
 
 #[tauri::command]
-pub fn subkade_search(
+pub async fn subkade_search(
     query: String,
     limit: Option<u8>,
 ) -> AppResult<Vec<crate::media::subkade::SubkadeResult>> {
-    // Blocking HTTP in a command thread; Tauri spawns commands off the main thread.
-    crate::media::subkade::search(&query, limit.unwrap_or(8))
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::media::subkade::search(&query, limit.unwrap_or(8))
+    })
+    .await
+    .map_err(|e| RenamiqError::with_source("Search task failed", e))?
 }
 
 #[tauri::command]
-pub fn subkade_download(post_url: String, video_path: PathBuf) -> AppResult<Vec<PathBuf>> {
-    let zip = crate::media::subkade::find_zip_link(&post_url)?;
-    crate::media::subkade::download_and_extract(&zip, &video_path)
+pub async fn subkade_download(
+    post_url: String,
+    video_path: PathBuf,
+    app: tauri::AppHandle,
+) -> AppResult<Vec<PathBuf>> {
+    use tauri::Emitter;
+    tauri::async_runtime::spawn_blocking(move || {
+        let zip = crate::media::subkade::find_zip_link(&post_url)?;
+        let total = crate::media::subkade::zip_size(&zip).unwrap_or(0);
+        crate::media::subkade::download_and_extract(&zip, &video_path, |downloaded| {
+            let _ = app.emit(
+                "subkade-progress",
+                serde_json::json!({
+                    "url": post_url,
+                    "downloaded": downloaded,
+                    "total": total,
+                }),
+            );
+        })
+    })
+    .await
+    .map_err(|e| RenamiqError::with_source("Download task failed", e))?
 }
 
 /// Standalone download: extracts subtitles straight into a folder.
+/// Emits `subkade-progress` events with `{ url, downloaded, total }` while the
+/// zip streams; `total` is 0 when the server omits Content-Length.
 /// Returns (extracted files, zip size in bytes).
 #[tauri::command]
-pub fn subkade_download_to_folder(
+pub async fn subkade_download_to_folder(
     post_url: String,
     dest_dir: PathBuf,
+    subfolder: Option<String>,
+    app: tauri::AppHandle,
 ) -> AppResult<(Vec<PathBuf>, u64)> {
-    let zip = crate::media::subkade::find_zip_link(&post_url)?;
-    let size = crate::media::subkade::zip_size(&zip).unwrap_or(0);
-    let files = crate::media::subkade::download_to_dir(&zip, &dest_dir)?;
-    Ok((files, size))
+    use tauri::Emitter;
+    tauri::async_runtime::spawn_blocking(move || {
+        let zip = crate::media::subkade::find_zip_link(&post_url)?;
+        let size = crate::media::subkade::zip_size(&zip).unwrap_or(0);
+        let sub = subfolder.unwrap_or_default();
+        let files = crate::media::subkade::download_to_dir(&zip, &dest_dir, &sub, |downloaded| {
+            let _ = app.emit(
+                "subkade-progress",
+                serde_json::json!({
+                    "url": post_url,
+                    "downloaded": downloaded,
+                    "total": size,
+                }),
+            );
+        })?;
+        Ok((files, size))
+    })
+    .await
+    .map_err(|e| RenamiqError::with_source("Download task failed", e))?
+}
+
+/// Pre-fetch the zip byte length for a post URL so the UI can display the
+/// archive size before the user clicks download.
+#[tauri::command]
+pub async fn subkade_zip_size(post_url: String) -> AppResult<u64> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let zip = crate::media::subkade::find_zip_link(&post_url)?;
+        crate::media::subkade::zip_size(&zip)
+    })
+    .await
+    .map_err(|e| RenamiqError::with_source("Zip size check failed", e))?
 }
 
 // ── EMBED (SUBTITLE MUXING) ──────────────────────────────────
 
 #[tauri::command]
-pub fn embed_subtitle(
+pub async fn embed_subtitle(
     video: PathBuf,
     subtitle: PathBuf,
     language: Option<String>,
 ) -> AppResult<PathBuf> {
-    crate::media::embed::embed(&crate::media::embed::EmbedRequest {
-        video,
-        subtitle,
-        language: language.unwrap_or_else(|| "per".into()),
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::media::embed::embed(&crate::media::embed::EmbedRequest {
+            video,
+            subtitle,
+            language: language.unwrap_or_else(|| "per".into()),
+        })
     })
+    .await
+    .map_err(|e| RenamiqError::with_source("Embedding task failed", e))?
 }
 
 // ── TMDB (POSTER SEARCH/DOWNLOAD) ────────────────────────────
 
 #[tauri::command]
-pub fn tmdb_search(
+pub async fn tmdb_search(
     query: String,
     api_key: String,
     limit: Option<u8>,
 ) -> AppResult<Vec<crate::media::tmdb::TmdbResult>> {
-    crate::media::tmdb::search(&query, &api_key, limit.unwrap_or(8))
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::media::tmdb::search(&query, &api_key, limit.unwrap_or(8))
+    })
+    .await
+    .map_err(|e| RenamiqError::with_source("Search task failed", e))?
 }
 
 #[tauri::command]
-pub fn tmdb_download_poster(
+pub async fn tmdb_download_poster(
     result: crate::media::tmdb::TmdbResult,
     api_key: String,
     dest_dir: PathBuf,
+    app: tauri::AppHandle,
 ) -> AppResult<PathBuf> {
-    crate::media::tmdb::download_poster(&result, &api_key, &dest_dir)
+    use tauri::Emitter;
+    tauri::async_runtime::spawn_blocking(move || {
+        let id = result.id;
+        crate::media::tmdb::download_poster(&result, &api_key, &dest_dir, |downloaded, total| {
+            let _ = app.emit(
+                "poster-progress",
+                serde_json::json!({
+                    "id": id,
+                    "downloaded": downloaded,
+                    "total": total,
+                }),
+            );
+        })
+    })
+    .await
+    .map_err(|e| RenamiqError::with_source("Download task failed", e))?
 }

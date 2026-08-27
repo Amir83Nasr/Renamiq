@@ -1,9 +1,10 @@
 // ── SUBKADE SUBTITLE SEARCH ──────────────────────────────────
 
 import { Download, Loader2, Search, X } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Progress } from "@/components/ui/progress";
 import {
   Tooltip,
   TooltipContent,
@@ -12,6 +13,7 @@ import {
 } from "@/components/ui/tooltip";
 import { t } from "@/i18n";
 import {
+  onSubkadeProgress,
   type SubkadeResult,
   subkadeDownload,
   subkadeSearch,
@@ -30,8 +32,26 @@ export function SubkadeDialog({
   const [results, setResults] = useState<SubkadeResult[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
+  const [progress, setProgress] = useState<Record<string, number | null>>({});
   const [done, setDone] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void onSubkadeProgress((p) => {
+      if (p.total > 0) {
+        const pct = Math.min(100, Math.round((p.downloaded / p.total) * 100));
+        setProgress((prev) => ({ ...prev, [p.url]: pct }));
+      } else {
+        setProgress((prev) => ({ ...prev, [p.url]: prev[p.url] ?? null }));
+      }
+    }).then((u) => {
+      unlisten = u;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, []);
 
   const runSearch = async () => {
     const q = query.trim();
@@ -48,14 +68,23 @@ export function SubkadeDialog({
 
   const download = async (r: SubkadeResult) => {
     setDownloading(r.url);
+    setProgress((prev) => ({ ...prev, [r.url]: null }));
     setError(null);
     try {
       const files = await subkadeDownload(r.url, videoPath);
-      setDone(files.length > 0 ? files.join("\n") : null);
+      setDone(
+        files.length > 0
+          ? files.map((f) => f.split(/[\\/]/).pop()).join("\n")
+          : null,
+      );
     } catch (err) {
       setError(String(err));
     }
     setDownloading(null);
+    setProgress((prev) => {
+      const { [r.url]: _, ...rest } = prev;
+      return rest;
+    });
   };
 
   return (
@@ -120,25 +149,40 @@ export function SubkadeDialog({
         )}
 
         <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto">
-          {results?.map((r) => (
-            <li key={r.url}>
-              <button
-                type="button"
-                className="flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-start text-xs hover:bg-accent/50"
-                disabled={downloading !== null}
-                onClick={() => void download(r)}
-              >
-                <span dir="ltr" className="truncate font-medium">
-                  {r.title}
-                </span>
-                {downloading === r.url ? (
-                  <Loader2 className="size-4 shrink-0 animate-spin" />
-                ) : (
-                  <Download className="size-4 shrink-0 text-muted-foreground" />
-                )}
-              </button>
-            </li>
-          ))}
+          {results?.map((r) => {
+            const isDownloading = downloading === r.url;
+            const pct = progress[r.url];
+            return (
+              <li key={r.url}>
+                <button
+                  type="button"
+                  className="flex w-full flex-col gap-1.5 rounded-lg border px-3 py-2 text-start text-xs hover:bg-accent/50 disabled:opacity-50"
+                  disabled={downloading !== null}
+                  onClick={() => void download(r)}
+                >
+                  <span className="flex w-full items-center justify-between gap-2">
+                    <span dir="ltr" className="truncate font-medium">
+                      {r.title}
+                    </span>
+                    {isDownloading ? (
+                      pct === null ? (
+                        <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
+                          {t("subkade.downloadingUnknown")}
+                        </span>
+                      ) : (
+                        <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
+                          {t("subkade.downloading", { percent: pct })}
+                        </span>
+                      )
+                    ) : (
+                      <Download className="size-4 shrink-0 text-muted-foreground" />
+                    )}
+                  </span>
+                  {isDownloading && <Progress value={pct} />}
+                </button>
+              </li>
+            );
+          })}
           {results !== null && results.length === 0 && !searching && (
             <li className="px-3 py-6 text-center text-xs text-muted-foreground">
               {t("subkade.empty")}

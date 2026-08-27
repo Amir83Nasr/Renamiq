@@ -1,11 +1,12 @@
 // ── APP SIDEBAR ──────────────────────────────────────────────
 
 import {
-  Captions,
+  Download,
   History as HistoryIcon,
   Image,
   PackagePlus,
   Settings as SettingsIcon,
+  Trash2,
 } from "lucide-react";
 import {
   Sidebar,
@@ -13,6 +14,7 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
+  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -24,17 +26,42 @@ type PageId =
   | "workspace"
   | "subkade"
   | "embed"
+  | "remove"
   | "posters"
   | "history"
   | "settings";
 
-const NAV: { id: PageId; icon: typeof Image; labelKey: MessageKey }[] = [
-  { id: "workspace", icon: Image, labelKey: "nav.workspace" },
-  { id: "subkade", icon: Captions, labelKey: "nav.subkade" },
-  { id: "embed", icon: PackagePlus, labelKey: "nav.embed" },
-  { id: "posters", icon: Image, labelKey: "nav.posters" },
-  { id: "history", icon: HistoryIcon, labelKey: "nav.history" },
-  { id: "settings", icon: SettingsIcon, labelKey: "nav.settings" },
+interface NavGroup {
+  labelKey: MessageKey;
+  items: { id: PageId; icon: typeof Image; labelKey: MessageKey }[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    labelKey: "nav.group.main",
+    items: [{ id: "workspace", icon: Image, labelKey: "nav.workspace" }],
+  },
+  {
+    labelKey: "nav.group.downloads",
+    items: [
+      { id: "subkade", icon: Download, labelKey: "nav.subkade" },
+      { id: "posters", icon: Image, labelKey: "nav.posters" },
+    ],
+  },
+  {
+    labelKey: "nav.group.subtitles",
+    items: [
+      { id: "embed", icon: PackagePlus, labelKey: "nav.embed" },
+      { id: "remove", icon: Trash2, labelKey: "nav.remove" },
+    ],
+  },
+  {
+    labelKey: "nav.group.system",
+    items: [
+      { id: "history", icon: HistoryIcon, labelKey: "nav.history" },
+      { id: "settings", icon: SettingsIcon, labelKey: "nav.settings" },
+    ],
+  },
 ];
 
 export type { PageId };
@@ -75,25 +102,28 @@ export function AppSidebar({
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {NAV.map(({ id, icon: Icon, labelKey }) => (
-                <SidebarMenuItem key={id}>
-                  <SidebarMenuButton
-                    isActive={page === id}
-                    className="data-active:bg-primary/10 data-active:text-primary data-active:hover:bg-primary/15"
-                    onClick={() => onNavigate(id)}
-                    aria-current={page === id ? "page" : undefined}
-                  >
-                    <Icon />
-                    <span>{t(labelKey)}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+        {NAV_GROUPS.map((group) => (
+          <SidebarGroup key={group.labelKey}>
+            <SidebarGroupLabel>{t(group.labelKey)}</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {group.items.map(({ id, icon: Icon, labelKey }) => (
+                  <SidebarMenuItem key={id}>
+                    <SidebarMenuButton
+                      isActive={page === id}
+                      className="data-active:bg-primary/10 data-active:text-primary data-active:hover:bg-primary/15"
+                      onClick={() => onNavigate(id)}
+                      aria-current={page === id ? "page" : undefined}
+                    >
+                      <Icon />
+                      <span>{t(labelKey)}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
       <SidebarFooter />
     </Sidebar>

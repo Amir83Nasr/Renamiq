@@ -40,6 +40,15 @@ pub fn run() {
                         None,
                         None,
                     );
+
+                    // Prevent stealing focus on startup/dev restart on macOS
+                    #[allow(unexpected_cfgs)]
+                    unsafe {
+                        use objc::*;
+                        let ns_app: *mut objc::runtime::Object = msg_send![class!(NSApplication), sharedApplication];
+                        let _: () = msg_send![ns_app, hide: std::ptr::null_mut::<()>()];
+                        let _: () = msg_send![ns_app, unhideWithoutActivation];
+                    }
                 }
             }
 
@@ -60,7 +69,9 @@ pub fn run() {
             commands::subkade_search,
             commands::subkade_download,
             commands::subkade_download_to_folder,
+            commands::subkade_zip_size,
             commands::embed_subtitle,
+            commands::remove_subtitle,
             commands::tmdb_search,
             commands::tmdb_download_poster,
         ])

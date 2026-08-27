@@ -1,15 +1,12 @@
-//! TMDB (themoviedb.org) integration: search movies/TV by name and download
-//! the official poster image. Requires a free API key from the user.
+//! OMDb (omdbapi.com) integration: search movies/TV by name and download
+//! the poster image. Uses the free OMDb API (api key "trilogy") or a user key.
 use crate::core::error::{AppResult, RenamiqError};
 use serde::{Deserialize, Serialize};
 
-const API: &str = "https://api.themoviedb.org/3";
-/// Poster CDN base; `size` is one of TMDB's documented widths.
-const IMG: &str = "https://image.tmdb.org/t/p";
-const POSTER_SIZE: &str = "w500";
-/// ponytail: public TMDB key shipped by luxeposter.vercel.app (PosterFlix);
-/// lets poster search work with zero setup. A user key from Settings wins.
-const FALLBACK_KEY: &str = "8265bd1679663a7ea12ac168da84d2e8";
+const API: &str = "https://www.omdbapi.com";
+/// ponytail: free public OMDb key; lets poster search work with zero setup.
+/// A user key from Settings wins.
+const FALLBACK_KEY: &str = "trilogy";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -19,8 +16,8 @@ pub struct TmdbResult {
     pub year: Option<u32>,
     /// True for TV shows, false for movies.
     pub is_tv: bool,
-    /// Relative poster path on the TMDB CDN, e.g. "/abc.jpg".
-    pub poster_path: Option<String>,
+    /// Full poster URL (Amazon CDN) or empty when the result has no poster.
+    pub poster_url: String,
 }
 
 fn http() -> AppResult<reqwest::blocking::Client> {
@@ -31,8 +28,7 @@ fn http() -> AppResult<reqwest::blocking::Client> {
         .map_err(|e| RenamiqError::with_source("Network is unavailable", e))
 }
 
-/// TMDB's edge intermittently answers 404 (code 34) or drops connections on
-/// some networks; an immediate retry usually succeeds.
+/// OMDDb edge can be flaky; retry once before giving up.
 fn get_json(url: &str) -> AppResult<serde_json::Value> {
     let client = http()?;
     let mut last = RenamiqError::user("Search failed");
@@ -50,86 +46,148 @@ fn get_json(url: &str) -> AppResult<serde_json::Value> {
     Err(last)
 }
 
-/// Search both movie and TV endpoints; merges results (movies first).
-pub fn search(query: &str, api_key: &str, limit: u8) -> AppResult<Vec<TmdbResult>> {
+/// Search IMDb suggestion API for official, high-quality movie & TV posters.
+pub fn search(query: &str, _api_key: &str, limit: u8) -> AppResult<Vec<TmdbResult>> {
     let query = query.trim();
     if query.is_empty() {
         return Ok(Vec::new());
     }
+    let first_char = query.chars().next().unwrap_or('a').to_ascii_lowercase();
+    let enc = crate::media::subkade::utf8_percent_encode_pub(query);
+    let url = format!("https://v2.sg.media-imdb.com/suggestion/{}/{}.json", first_char, enc);
+
+    let client = http()?;
+    let resp = client.get(&url).send();
+    let json: serde_json::Value = match resp {
+        Ok(r) if r.status().is_success() => r.json().unwrap_or_default(),
+        _ => {
+            // Fallback to OMDb if IMDb suggestion fails
+            return search_omdb(query, _api_key, limit);
+        }
+    };
+
+    let Some(d) = json["d"].as_array() else {
+        return search_omdb(query, _api_key, limit);
+    };
+
+    let mut out = Vec::new();
+    for item in d {
+        if out.len() >= limit as usize {
+            break;
+        }
+        let q_type = item["q"].as_str().unwrap_or_default();
+        if q_type != "feature" && q_type != "tvSeries" && q_type != "tvMiniSeries" {
+            continue;
+        }
+        let title = item["l"].as_str().unwrap_or_default().to_string();
+        if title.is_empty() {
+            continue;
+        }
+        let year = item["y"].as_u64().map(|y| y as u32);
+        let id_str = item["id"].as_str().unwrap_or_default();
+        let id = id_str
+            .trim_start_matches('t')
+            .parse::<u64>()
+            .unwrap_or_else(|_| id_str.bytes().fold(0, |acc, b| acc.wrapping_add(b as u64)));
+
+        let is_tv = q_type.contains("tv");
+        let poster_url = item["i"]["imageUrl"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
+
+        out.push(TmdbResult {
+            id,
+            title,
+            year,
+            is_tv,
+            poster_url,
+        });
+    }
+
+    if out.is_empty() {
+        return search_omdb(query, _api_key, limit);
+    }
+
+    Ok(out)
+}
+
+fn search_omdb(query: &str, api_key: &str, limit: u8) -> AppResult<Vec<TmdbResult>> {
     let api_key = match api_key.trim() {
         "" => FALLBACK_KEY,
         k => k,
     };
     let enc = crate::media::subkade::utf8_percent_encode_pub(query);
     let mut out: Vec<TmdbResult> = Vec::new();
-    // ponytail: api_key must come after query — TMDB rejects this key when it
-    // doesn't (observed 404 status_code 34 with key-first param order).
-    for (endpoint, is_tv) in [("movie", false), ("tv", true)] {
+    for media_type in ["movie", "series"] {
         if out.len() >= limit as usize {
             break;
         }
-        let url =
-            format!("{API}/search/{endpoint}?query={enc}&include_adult=false&api_key={api_key}");
+        let url = format!("{API}/?s={enc}&type={media_type}&apikey={api_key}");
         let Ok(json) = get_json(&url) else {
             continue;
         };
-        let Some(items) = json["results"].as_array() else {
+        if json["Response"].as_str() == Some("False") {
+            continue;
+        }
+        let Some(items) = json["Search"].as_array() else {
             continue;
         };
         for item in items {
             if out.len() >= limit as usize {
                 break;
             }
-            let title = item["title"]
-                .as_str()
-                .or_else(|| item["name"].as_str())
-                .unwrap_or_default()
-                .to_string();
+            let title = item["Title"].as_str().unwrap_or_default().to_string();
             if title.is_empty() {
                 continue;
             }
-            let year = item["release_date"]
+            let year = item["Year"]
                 .as_str()
-                .or_else(|| item["first_air_date"].as_str())
-                .and_then(|d| d.get(0..4))
+                .and_then(|y| y.get(0..4))
                 .and_then(|y| y.parse::<u32>().ok());
+            let poster = item["Poster"].as_str().unwrap_or("").to_string();
+            let id = item["imdbID"]
+                .as_str()
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(0);
             out.push(TmdbResult {
-                id: item["id"].as_u64().unwrap_or(0),
+                id,
                 title,
                 year,
-                is_tv,
-                poster_path: item["poster_path"].as_str().map(String::from),
+                is_tv: media_type == "series",
+                poster_url: if poster == "N/A" {
+                    String::new()
+                } else {
+                    poster
+                },
             });
         }
     }
     Ok(out)
 }
 
-/// Download the poster for a result and save it as `<dest_dir>/<title>.jpg`.
-/// Returns the written file path.
+/// Download the poster image from the full URL and save it as
+/// `<dest_dir>/<title>.jpg`. Streams the body and reports
+/// `on_progress(downloaded, total)` so the UI can show a live progress bar.
 pub fn download_poster(
     result: &TmdbResult,
-    api_key: &str,
+    _api_key: &str,
     dest_dir: &std::path::Path,
+    mut on_progress: impl FnMut(u64, u64),
 ) -> AppResult<std::path::PathBuf> {
-    let Some(poster_path) = result.poster_path.as_deref().filter(|p| p.starts_with('/')) else {
+    use std::io::{Read, Write};
+    if result.poster_url.is_empty() {
         return Err(RenamiqError::user("This result has no poster"));
-    };
+    }
 
-    // ponytail: re-fetch details only when poster is missing from search
-    // results; search already carries it for every match we show.
-    let _ = api_key;
-
-    // Same flapping edge as the API: retry once before giving up.
     let client = http()?;
-    let bytes = (0..2)
+    let mut response = (0..2)
         .find_map(|_| {
             client
-                .get(format!("{IMG}/{POSTER_SIZE}{poster_path}"))
+                .get(&result.poster_url)
                 .timeout(std::time::Duration::from_secs(60))
                 .send()
                 .and_then(|r| r.error_for_status())
-                .and_then(|r| r.bytes())
                 .ok()
         })
         .ok_or_else(|| RenamiqError::user("Download failed"))?;
@@ -142,7 +200,22 @@ pub fn download_poster(
         .map(|c| if std::path::is_separator(c) { ' ' } else { c })
         .collect();
     let file = dest_dir.join(format!("{safe_title}.jpg"));
-    std::fs::write(&file, &bytes)
+    let mut out = std::fs::File::create(&file)
         .map_err(|e| RenamiqError::with_source("Could not write poster", e))?;
+    let total = response.content_length().unwrap_or(0);
+    let mut downloaded: u64 = 0;
+    let mut buf = [0u8; 32 * 1024];
+    loop {
+        let n = response
+            .read(&mut buf)
+            .map_err(|e| RenamiqError::with_source("Download failed", e))?;
+        if n == 0 {
+            break;
+        }
+        out.write_all(&buf[..n])
+            .map_err(|e| RenamiqError::with_source("Download failed", e))?;
+        downloaded = downloaded.saturating_add(n as u64);
+        on_progress(downloaded, total);
+    }
     Ok(file)
 }

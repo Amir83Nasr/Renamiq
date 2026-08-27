@@ -160,66 +160,127 @@ pub fn zip_size(zip_url: &str) -> AppResult<u64> {
 }
 
 /// Download the zip and extract subtitle files next to `video_path`.
-/// Returns extracted file paths.
+/// Returns extracted file paths. `on_progress(bytes_downloaded)` is called as
+/// bytes stream in; useful for emitting Tauri progress events.
 pub fn download_and_extract(
     zip_url: &str,
     video_path: &std::path::Path,
+    on_progress: impl FnMut(u64),
 ) -> AppResult<Vec<std::path::PathBuf>> {
     let dest_dir = video_path
         .parent()
         .ok_or_else(|| RenamiqError::user("Video has no parent folder"))?;
-    download_to_dir(zip_url, dest_dir)
+    download_to_dir(zip_url, dest_dir, "", on_progress)
 }
 
 /// Download the zip and extract subtitle files into `dest_dir` directly.
+/// If `subfolder` is non-empty, creates `dest_dir/subfolder` and extracts into it.
 pub fn download_to_dir(
     zip_url: &str,
     dest_dir: &std::path::Path,
+    subfolder: &str,
+    mut on_progress: impl FnMut(u64),
 ) -> AppResult<Vec<std::path::PathBuf>> {
     if !zip_url.starts_with("https://") || !zip_url.contains(DL_HOST) {
         return Err(RenamiqError::user("Unexpected download host"));
     }
 
-    let bytes = dl_request(&http()?, zip_url)
+    let mut response = dl_request(&http()?, zip_url)
         .timeout(std::time::Duration::from_secs(120))
         .send()
         .map_err(|e| RenamiqError::with_source("Download failed", e))?
         .error_for_status()
-        .map_err(|e| RenamiqError::with_source("Download failed", e))?
-        .bytes()
         .map_err(|e| RenamiqError::with_source("Download failed", e))?;
 
-    let mut out = Vec::new();
-    let cursor = std::io::Cursor::new(bytes.as_ref());
-    let mut archive = zip::ZipArchive::new(cursor)
+    // Stream the zip to a sibling temp file so we can rewind for the archive
+    // reader. The temp file is removed whether extraction succeeds or fails.
+    let temp = std::env::temp_dir().join(format!(
+        "renamiq-subkade-{}.zip",
+        std::process::id()
+    ));
+    let mut file = std::fs::File::create(&temp)
+        .map_err(|e| RenamiqError::with_source("Could not write subtitle", e))?;
+    let mut downloaded: u64 = 0;
+    let mut buf = [0u8; 64 * 1024];
+    let result: AppResult<()> = (|| {
+        loop {
+            let n = std::io::Read::read(&mut response, &mut buf)
+                .map_err(|e| RenamiqError::with_source("Download failed", e))?;
+            if n == 0 {
+                break;
+            }
+            std::io::Write::write_all(&mut file, &buf[..n])
+                .map_err(|e| RenamiqError::with_source("Download failed", e))?;
+            downloaded = downloaded.saturating_add(n as u64);
+            on_progress(downloaded);
+        }
+        Ok(())
+    })();
+    // Always flush the temp file before the reader re-opens it.
+    drop(file);
+    if let Err(e) = result {
+        let _ = std::fs::remove_file(&temp);
+        return Err(e);
+    }
+
+    let extract_result = extract_zip_entries(&temp, dest_dir, subfolder);
+    let _ = std::fs::remove_file(&temp);
+    extract_result
+}
+
+fn extract_zip_entries(
+    zip_path: &std::path::Path,
+    dest_dir: &std::path::Path,
+    subfolder: &str,
+) -> AppResult<Vec<std::path::PathBuf>> {
+    let target_dir = if subfolder.is_empty() {
+        dest_dir.to_path_buf()
+    } else {
+        let safe_sub: String = subfolder
+            .chars()
+            .map(|c| if std::path::is_separator(c) { ' ' } else { c })
+            .collect();
+        let d = dest_dir.join(safe_sub.trim());
+        std::fs::create_dir_all(&d)
+            .map_err(|e| RenamiqError::with_source("Could not create folder", e))?;
+        d
+    };
+
+    let file = std::fs::File::open(zip_path)
         .map_err(|e| RenamiqError::with_source("Archive is corrupted", e))?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|e| RenamiqError::with_source("Archive is corrupted", e))?;
+    let mut out = Vec::new();
     for i in 0..archive.len() {
         let mut entry = archive
             .by_index(i)
             .map_err(|e| RenamiqError::with_source("Archive is corrupted", e))?;
-        // ponytail: flat extraction, no nested dirs; subkade zips are flat.
-        let Some(name) = entry
-            .enclosed_name()
-            .and_then(|p| p.file_name().map(std::ffi::OsStr::to_owned))
-        else {
+        let Some(enclosed) = entry.enclosed_name() else {
             continue;
         };
-        if !is_subtitle_ext(&name.to_string_lossy()) {
+        let target = target_dir.join(enclosed);
+        if entry.is_dir() {
+            std::fs::create_dir_all(&target)
+                .map_err(|e| RenamiqError::with_source("Could not create folder", e))?;
             continue;
         }
-        let target = dest_dir.join(name);
+        if let Some(parent) = target.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| RenamiqError::with_source("Could not create folder", e))?;
+        }
         if target.exists() {
             continue;
         }
-        let mut file = std::fs::File::create(&target)
+        let mut out_file = std::fs::File::create(&target)
             .map_err(|e| RenamiqError::with_source("Could not write subtitle", e))?;
-        std::io::copy(&mut entry, &mut file)
+        std::io::copy(&mut entry, &mut out_file)
             .map_err(|e| RenamiqError::with_source("Could not write subtitle", e))?;
         out.push(target);
     }
     Ok(out)
 }
 
+#[allow(dead_code)]
 fn is_subtitle_ext(name: &str) -> bool {
     let lower = name.to_lowercase();
     [".srt", ".ass", ".ssa", ".sub", ".vtt"]

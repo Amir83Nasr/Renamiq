@@ -14,6 +14,7 @@ import { type MessageKey, t } from "@/i18n";
 import EmbedPage from "@/pages/EmbedPage";
 import HistoryPage from "@/pages/HistoryPage";
 import PostersPage from "@/pages/PostersPage";
+import RemoveSubtitlePage from "@/pages/RemoveSubtitlePage";
 import SettingsPage from "@/pages/SettingsPage";
 import SubkadePage from "@/pages/SubkadePage";
 import WorkspacePage from "@/pages/WorkspacePage";
@@ -87,12 +88,29 @@ export default function App() {
               onDoubleClick={() => setWidth(DEFAULT_SIDEBAR_WIDTH)}
             />
             <main className="min-w-0 flex-1 overflow-hidden">
-              {page === "workspace" && <WorkspacePage />}
-              {page === "subkade" && <SubkadePage />}
-              {page === "embed" && <EmbedPage />}
-              {page === "posters" && <PostersPage />}
-              {page === "history" && <HistoryPage />}
-              {page === "settings" && <SettingsPage />}
+              <div
+                className={page !== "workspace" ? "hidden" : "h-full w-full"}
+              >
+                <WorkspacePage />
+              </div>
+              <div className={page !== "subkade" ? "hidden" : "h-full w-full"}>
+                <SubkadePage />
+              </div>
+              <div className={page !== "embed" ? "hidden" : "h-full w-full"}>
+                <EmbedPage />
+              </div>
+              <div className={page !== "remove" ? "hidden" : "h-full w-full"}>
+                <RemoveSubtitlePage />
+              </div>
+              <div className={page !== "posters" ? "hidden" : "h-full w-full"}>
+                <PostersPage />
+              </div>
+              <div className={page !== "history" ? "hidden" : "h-full w-full"}>
+                <HistoryPage />
+              </div>
+              <div className={page !== "settings" ? "hidden" : "h-full w-full"}>
+                <SettingsPage />
+              </div>
             </main>
           </div>
         </TooltipProvider>
@@ -108,6 +126,7 @@ const PAGE_LABEL: Record<PageId, MessageKey> = {
   workspace: "nav.workspace",
   subkade: "nav.subkade",
   embed: "nav.embed",
+  remove: "nav.remove",
   posters: "nav.posters",
   history: "nav.history",
   settings: "nav.settings",
@@ -121,7 +140,7 @@ function ResizeHandle(props: React.ComponentProps<"hr">) {
   return (
     <hr
       aria-orientation="vertical"
-      aria-label={t("sidebar.resize")}
+      aria-label={t("nav.settings")}
       {...props}
       className="z-10 my-auto h-[calc(100%-1.5rem)] w-1 shrink-0 cursor-col-resize rounded-full border-none bg-border/40 hover:bg-sidebar-border active:bg-sidebar-border"
     />

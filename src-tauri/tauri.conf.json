@@ -15,11 +15,12 @@
         "title": "Renamiq",
         "width": 880,
         "height": 640,
-        "minWidth": 720,
+        "minWidth": 940,
         "minHeight": 560,
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
-        "transparent": false
+        "transparent": false,
+        "focus": false
       }
     ],
     "security": {

@@ -1,5 +1,6 @@
 /** Typed wrappers around Tauri commands. UI never calls invoke() raw. */
 import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   ConflictResolution,
   OperationHistoryItem,
@@ -73,17 +74,27 @@ export async function subkadeDownload(
   return invoke("subkade_download", { postUrl, videoPath });
 }
 
-/** Standalone: downloads the zip, extracts subtitles into destDir.
- *  Returns extracted paths and the zip size in bytes. */
+/** Standalone: downloads the zip, extracts subtitles into destDir (or
+ *  destDir/subfolder if specified). Returns extracted paths and zip size. */
 export async function subkadeDownloadToFolder(
   postUrl: string,
   destDir: string,
+  subfolder?: string,
 ): Promise<{ files: string[]; size: number }> {
   const [files, size] = await invoke<[string[], number]>(
     "subkade_download_to_folder",
-    { postUrl, destDir },
+    { postUrl, destDir, subfolder: subfolder ?? null },
   );
   return { files, size };
+}
+
+/** Pre-fetches the zip size (in bytes) for a post URL. Returns 0 on error. */
+export async function subkadeZipSize(postUrl: string): Promise<number> {
+  try {
+    return await invoke<number>("subkade_zip_size", { postUrl });
+  } catch {
+    return 0;
+  }
 }
 
 /** Muxes subtitle into video via ffmpeg; returns the final video path. */
@@ -95,12 +106,17 @@ export async function embedSubtitle(
   return invoke("embed_subtitle", { video, subtitle, language });
 }
 
+/** Removes all embedded subtitles from video via ffmpeg; returns the final video path. */
+export async function removeSubtitle(video: string): Promise<string> {
+  return invoke("remove_subtitle", { video });
+}
+
 export interface TmdbResult {
   id: number;
   title: string;
   year: number | null;
   isTv: boolean;
-  posterPath: string | null;
+  posterUrl: string;
 }
 
 export async function tmdbSearch(
@@ -119,8 +135,31 @@ export async function tmdbDownloadPoster(
   return invoke("tmdb_download_poster", { result, apiKey, destDir });
 }
 
-export const TMDB_POSTER_URL = (posterPath: string) =>
-  `https://image.tmdb.org/t/p/w500${posterPath}`;
+/** Progress payload emitted from Rust while a subkade zip streams. */
+export interface SubkadeProgress {
+  url: string;
+  downloaded: number;
+  total: number;
+}
+
+/** Progress payload emitted from Rust while a poster image streams. */
+export interface PosterProgress {
+  id: number;
+  downloaded: number;
+  total: number;
+}
+
+export function onSubkadeProgress(
+  handler: (p: SubkadeProgress) => void,
+): Promise<UnlistenFn> {
+  return listen<SubkadeProgress>("subkade-progress", (e) => handler(e.payload));
+}
+
+export function onPosterProgress(
+  handler: (p: PosterProgress) => void,
+): Promise<UnlistenFn> {
+  return listen<PosterProgress>("poster-progress", (e) => handler(e.payload));
+}
 
 /** Record keys are file paths; the Rust side expects a PathBuf-keyed map. */
 function toPathKeyedMap(resolutions: Record<string, ConflictResolution>) {

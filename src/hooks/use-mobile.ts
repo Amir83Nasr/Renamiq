@@ -1,8 +1,8 @@
 import * as React from "react";
 
-// Below the window minWidth (720) so the offcanvas Sheet never appears
+// Below the window minWidth so the offcanvas Sheet never appears
 // without a trigger; the docked sidebar always fits.
-const MOBILE_BREAKPOINT = 640;
+const MOBILE_BREAKPOINT = 940;
 
 export function useIsMobile() {
   const [isMobile, setIsMobile] = React.useState<boolean | undefined>(

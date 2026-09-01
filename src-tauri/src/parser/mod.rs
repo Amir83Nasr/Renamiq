@@ -229,11 +229,33 @@ fn capitalize(s: &str) -> String {
 
 /// Join title tokens with spaces and clean punctuation edges. Hyphen-joined
 /// scene titles ("Jack-Reaper") become spaces; standalone dashes vanish.
+/// Converts to title case (capitalizes major words, keeps minor words lowercase unless first/last).
 fn join_title(tokens: &[String]) -> String {
-    tokens
+    let raw_tokens: Vec<String> = tokens
         .iter()
         .flat_map(|t| t.split('-'))
         .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect();
+
+    if raw_tokens.is_empty() {
+        return String::new();
+    }
+
+    let minor_words = ["of", "the", "and", "in", "on", "at", "to", "for", "a", "an", "with", "by", "from"];
+
+    raw_tokens
+        .iter()
+        .enumerate()
+        .map(|(i, word)| {
+            let lower = word.to_lowercase();
+            let is_first_or_last = i == 0 || i == raw_tokens.len() - 1;
+            if !is_first_or_last && minor_words.contains(&lower.as_str()) {
+                lower
+            } else {
+                capitalize(word)
+            }
+        })
         .collect::<Vec<_>>()
         .join(" ")
 }
@@ -269,7 +291,7 @@ mod tests {
     fn tv_single_digit_se() {
         let p = parse_filename("House of dragons S2E7.mkv");
         assert_eq!(p.kind, MediaKind::Tv);
-        assert_eq!(p.title, "House of dragons");
+        assert_eq!(p.title, "House of Dragons");
         assert_eq!(p.season, Some(2));
         assert_eq!(p.episode, Some(7));
     }

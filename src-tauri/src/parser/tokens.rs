@@ -68,7 +68,7 @@ fn try_sxxexx_at(i: usize, tokens: &[String]) -> Option<EpisodeHit> {
 fn parse_se_token(t: &str) -> Option<(u8, u8)> {
     let l = t.to_lowercase();
     let bytes = l.as_bytes();
-    if bytes.len() < 5 || bytes[0] != b's' {
+    if bytes.len() < 4 || bytes[0] != b's' {
         return None;
     }
     let mid = l[1..].find('e')? + 1;
@@ -264,6 +264,18 @@ mod tests {
         assert_eq!((hit.season, hit.episode), (1, 1));
         assert_eq!(hit.index, 2);
         assert_eq!(hit.end_index(), 3);
+    }
+
+    #[test]
+    fn finds_single_digit_sxxexx() {
+        let hit = find_episode_marker(&toks("House of dragons S2E7 1080p")).unwrap();
+        assert_eq!((hit.season, hit.episode), (2, 7));
+
+        let hit2 = find_episode_marker(&toks("House of dragons S02E7 1080p")).unwrap();
+        assert_eq!((hit2.season, hit2.episode), (2, 7));
+
+        let hit3 = find_episode_marker(&toks("House of dragons S2E07 1080p")).unwrap();
+        assert_eq!((hit3.season, hit3.episode), (2, 7));
     }
 
     #[test]

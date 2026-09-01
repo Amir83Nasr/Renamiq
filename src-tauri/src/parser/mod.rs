@@ -266,6 +266,15 @@ mod tests {
     }
 
     #[test]
+    fn tv_single_digit_se() {
+        let p = parse_filename("House of dragons S2E7.mkv");
+        assert_eq!(p.kind, MediaKind::Tv);
+        assert_eq!(p.title, "House of dragons");
+        assert_eq!(p.season, Some(2));
+        assert_eq!(p.episode, Some(7));
+    }
+
+    #[test]
     fn tv_1x01_pattern() {
         let p = parse_filename("Breaking.Bad.1x02.1080p.WEBRip.x264.mkv");
         assert_eq!(p.kind, MediaKind::Tv);

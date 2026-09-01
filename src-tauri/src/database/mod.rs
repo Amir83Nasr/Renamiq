@@ -7,7 +7,19 @@ use std::sync::Mutex;
 
 use crate::core::error::{AppResult, RenamiqError};
 
+pub mod operations;
+
 pub struct Db(pub Mutex<Connection>);
+
+impl Db {
+    /// Lock the single connection. Poisoning is reported as a user error
+    /// rather than panicking the command thread.
+    pub fn conn(&self) -> AppResult<std::sync::MutexGuard<'_, Connection>> {
+        self.0
+            .lock()
+            .map_err(|_| RenamiqError::user("Database busy"))
+    }
+}
 
 const MIGRATIONS: &[&str] = &[
     // v1: initial schema
@@ -48,6 +60,21 @@ const MIGRATIONS: &[&str] = &[
         undo_journal TEXT -- JSON array of {from,to} for reversal
     );
     CREATE INDEX idx_media_library ON media_files(library_id);
+    ",
+    // v2: history rows must survive undo. `undo_journal` is cleared on undo,
+    // so the file count is denormalized into its own column, and the revert
+    // time is recorded instead of being inferred from a NULL journal.
+    "
+    ALTER TABLE operations ADD COLUMN item_count INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE operations ADD COLUMN undone_at TEXT;
+    -- Backfill: prefer the journal; fall back to the leading integer in
+    -- summary ('10 file(s)') for rows already undone under the old code.
+    UPDATE operations SET item_count = COALESCE(
+        json_array_length(undo_journal),
+        CAST(summary AS INTEGER)
+    );
+    UPDATE operations SET undone_at = created_at WHERE undo_journal IS NULL;
+    CREATE INDEX idx_operations_created ON operations(id DESC);
     ",
 ];
 

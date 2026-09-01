@@ -3,11 +3,11 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use tauri::State;
 
 use crate::core::error::{AppResult, RenamiqError};
-use crate::database::Db;
+use crate::database::{operations, Db};
 use crate::rename::executor::{self, JournalEntry, OpResult};
 use crate::rename::planner::{self, RenamePlan};
 use crate::scanner;
@@ -59,32 +59,47 @@ pub fn execute_operations(
     db: State<'_, Db>,
 ) -> AppResult<Vec<OpResult>> {
     let results = executor::execute_plan(&items, &resolutions)?;
-    let journal: Vec<JournalEntry> = results
-        .iter()
-        .filter_map(|r| {
-            r.destination.as_ref().map(|dest| JournalEntry {
-                from: r.path.clone(),
-                to: dest.clone(),
+    // An all-failed batch is still recorded: history has to explain what the
+    // user attempted, not just what worked.
+    if !results.is_empty() {
+        let journal: Vec<JournalEntry> = results
+            .iter()
+            .filter_map(|r| {
+                r.destination.as_ref().map(|dest| JournalEntry {
+                    from: r.path.clone(),
+                    to: dest.clone(),
+                })
             })
-        })
-        .collect();
-    if !journal.is_empty() {
-        record_operation(&db, "rename", &journal)?;
+            .collect();
+        let failed = results.len() - journal.len();
+        let status = match (journal.len(), failed) {
+            (0, _) => "failed",
+            (_, 0) => "completed",
+            _ => "partial",
+        };
+        let summary = if failed == 0 {
+            format!("{} file(s)", journal.len())
+        } else {
+            format!("{} of {} file(s)", journal.len(), results.len())
+        };
+        // A failed history write must not discard results the user already
+        // sees on disk — log it and return the outcome regardless.
+        if let Err(err) = record_operation(&db, "rename", status, &summary, &journal) {
+            log::warn!("could not record operation history: {err}");
+        }
     }
     Ok(results)
 }
 
-fn record_operation(db: &State<'_, Db>, kind: &str, journal: &[JournalEntry]) -> AppResult<()> {
-    let conn =
-        db.0.lock()
-            .map_err(|_| RenamiqError::user("Database busy"))?;
-    let json = serde_json::to_string(journal)
-        .map_err(|e| RenamiqError::with_source("Could not serialize journal", e))?;
-    conn.execute(
-        "INSERT INTO operations (kind, summary, status, undo_journal) VALUES (?1, ?2, 'completed', ?3)",
-        rusqlite::params![kind, format!("{} file(s)", journal.len()), json],
-    )
-    .map_err(|e| RenamiqError::with_source("Could not save operation history", e))?;
+fn record_operation(
+    db: &State<'_, Db>,
+    kind: &str,
+    status: &str,
+    summary: &str,
+    journal: &[JournalEntry],
+) -> AppResult<()> {
+    let conn = db.conn()?;
+    operations::record(&conn, kind, status, summary, journal)?;
     Ok(())
 }
 
@@ -94,87 +109,28 @@ pub fn remove_subtitle(video: String) -> AppResult<String> {
     crate::media::remove_subs::remove_subtitles(&path).map(|p| p.to_string_lossy().into_owned())
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OperationHistoryItem {
-    pub id: i64,
-    pub kind: String,
-    pub summary: String,
-    pub status: String,
-    pub created_at: String,
-    pub can_undo: bool,
-    pub item_count: usize,
-}
-
 #[tauri::command]
-pub fn list_operations(db: State<'_, Db>) -> AppResult<Vec<OperationHistoryItem>> {
-    let conn =
-        db.0.lock()
-            .map_err(|_| RenamiqError::user("Database busy"))?;
-    let mut stmt = conn
-        .prepare("SELECT id, kind, summary, status, created_at, undo_journal FROM operations ORDER BY id DESC LIMIT 200")
-        .map_err(|e| RenamiqError::with_source("Could not read history", e))?;
-    let rows = stmt
-        .query_map([], |r| {
-            let journal: Option<String> = r.get(5)?;
-            Ok(OperationHistoryItem {
-                id: r.get(0)?,
-                kind: r.get(1)?,
-                summary: r.get(2)?,
-                status: r.get(3)?,
-                created_at: r.get(4)?,
-                can_undo: journal.is_some(),
-                item_count: journal
-                    .as_deref()
-                    .and_then(|j| serde_json::from_str::<Vec<JournalEntry>>(j).ok())
-                    .map(|v| v.len())
-                    .unwrap_or(0),
-            })
-        })
-        .map_err(|e| RenamiqError::with_source("Could not read history", e))?;
-    let items = rows.filter_map(Result::ok).collect();
-    drop(stmt);
-    Ok(items)
+pub fn list_operations(db: State<'_, Db>) -> AppResult<Vec<operations::OperationRecord>> {
+    let conn = db.conn()?;
+    operations::list(&conn, 200)
 }
 
 /// Undo the most recent reversible operation by replaying its journal
 /// backwards. Only renames are journaled, so reversal is exact.
 #[tauri::command]
 pub fn undo_last_operation(db: State<'_, Db>) -> AppResult<String> {
-    let (op_id, journal_json) = {
-        let conn =
-            db.0.lock()
-                .map_err(|_| RenamiqError::user("Database busy"))?;
-        let row: Option<(i64, String)> = conn
-            .query_row(
-                "SELECT id, undo_journal FROM operations WHERE undo_journal IS NOT NULL ORDER BY id DESC LIMIT 1",
-                [],
-                |r| Ok((r.get(0)?, r.get(1)?)),
-            )
-            .map(Some)
-            .or_else(|e| match e {
-                rusqlite::Error::QueryReturnedNoRows => Ok(None),
-                other => Err(other),
-            })
-            .map_err(|e| RenamiqError::with_source("Could not read history", e))?;
-        match row {
-            Some(pair) => pair,
-            None => return Err(RenamiqError::user("Nothing to undo")),
-        }
+    // The lock is released before touching the filesystem so a slow rename
+    // cannot block other commands.
+    let (op_id, journal) = {
+        let conn = db.conn()?;
+        operations::last_undoable(&conn)?
+            .ok_or_else(|| RenamiqError::user("Nothing to undo"))?
     };
-    let journal: Vec<JournalEntry> = serde_json::from_str(&journal_json)
-        .map_err(|e| RenamiqError::with_source("Undo journal is corrupted", e))?;
 
     let restored = executor::undo_journal(&journal)?;
 
-    let conn =
-        db.0.lock()
-            .map_err(|_| RenamiqError::user("Database busy"))?;
-    conn.execute(
-        "UPDATE operations SET undo_journal = NULL WHERE id = ?1",
-        [op_id],
-    )
-    .map_err(|e| RenamiqError::with_source("Could not update history", e))?;
+    let conn = db.conn()?;
+    operations::mark_undone(&conn, op_id)?;
     Ok(format!("Restored {restored} file(s)"))
 }
 
@@ -182,9 +138,7 @@ pub fn undo_last_operation(db: State<'_, Db>) -> AppResult<String> {
 
 #[tauri::command]
 pub fn get_settings(db: State<'_, Db>) -> AppResult<HashMap<String, String>> {
-    let conn =
-        db.0.lock()
-            .map_err(|_| RenamiqError::user("Database busy"))?;
+    let conn = db.conn()?;
     let mut stmt = conn
         .prepare("SELECT key, value FROM settings")
         .map_err(|e| RenamiqError::with_source("Could not read settings", e))?;
@@ -200,9 +154,7 @@ pub fn set_setting(key: String, value: String, db: State<'_, Db>) -> AppResult<(
     if key.is_empty() {
         return Err(RenamiqError::user("Setting key is empty"));
     }
-    let conn =
-        db.0.lock()
-            .map_err(|_| RenamiqError::user("Database busy"))?;
+    let conn = db.conn()?;
     conn.execute(
         "INSERT INTO settings (key, value) VALUES (?1, ?2)
          ON CONFLICT(key) DO UPDATE SET value = excluded.value",

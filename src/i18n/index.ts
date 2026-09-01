@@ -140,36 +140,58 @@ export const dictionaries = {
     "resolution.applyAll": "Apply to all conflicts",
 
     "history.empty": "No rename operations yet",
+    "history.emptyHint":
+      "Renames you run in the workspace show up here, newest first.",
     "history.items": "{count} files",
+    "history.count": "{count} operations",
     "history.undo": "Undo",
     "history.undoDone": "Operation undone",
+    "history.loading": "Loading history…",
+    "history.refresh": "Refresh",
+    "history.retry": "Try again",
+    "history.kind.rename": "Rename",
+    "history.status.completed": "Completed",
+    "history.status.partial": "Partly done",
+    "history.status.failed": "Failed",
+    "history.status.undone": "Undone",
+
+    "settings.about.version": "Version 0.2.0",
+    "settings.about.description":
+      "Intelligent media renaming and organization. Detects titles, years, seasons and episodes from messy filenames and produces clean, organized output.",
 
     "settings.templates": "Naming templates",
-    "settings.templates.hint": "Click a variable to insert it at the cursor.",
+    "settings.templates.hint":
+      "Customize how renamed files are formatted. Click a variable to insert it.",
+    "settings.templates.variables": "Available variables",
+    "settings.templates.var.title": "Media title",
+    "settings.templates.var.year": "Release year",
+    "settings.templates.var.season": "Season number",
+    "settings.templates.var.episode": "Episode number",
+    "settings.templates.var.resolution": "Video resolution (e.g. 1080p)",
+    "settings.templates.var.codec": "Video codec (e.g. x265)",
+    "settings.templates.var.group": "Release group",
+    "settings.templates.var.audio": "Audio codec (e.g. DDP5.1)",
+    "settings.templates.var.edition": "Edition tag (e.g. Extended)",
     "settings.template.movie": "Movie",
     "settings.template.tv": "TV episode",
-    "settings.template.preview": "Preview",
+    "settings.template.preview": "Example output",
+    "settings.template.reset": "Reset",
     "settings.template.empty": "(empty — default is used)",
+
     "settings.folders": "Destination folders",
     "settings.folders.hint":
-      "Where organized movies and series are moved. Leave empty to use the scanned folder.",
+      "Where organized movies and series are moved after renaming.",
     "settings.folders.movieLabel": "Movies folder",
+    "settings.folders.movieHint":
+      "Movies will be placed inside this directory.",
     "settings.folders.tvLabel": "Series folder",
+    "settings.folders.tvHint":
+      "Series will be organized into Season sub-folders here.",
     "settings.folders.pick": "Choose",
     "settings.folders.clear": "Clear",
-    "settings.folders.default": "Default: inside the scanned folder",
+    "settings.folders.default":
+      "When empty, files stay inside the folder you scanned.",
     "settings.language": "Language",
-
-    // Model configuration / settings
-    "settings.model": "AI Model Configuration",
-    "settings.model.hint":
-      "Configure output model provider, name, and advanced generation settings.",
-    "settings.model.provider": "Provider",
-    "settings.model.name": "Model Name",
-    "settings.model.temperature": "Temperature",
-    "settings.model.maxTokens": "Max Output Tokens",
-    "settings.model.apiKey": "API Key",
-    "settings.model.saved": "Model settings saved successfully",
 
     "error.generic": "Something went wrong. Please try again.",
   },

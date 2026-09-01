@@ -613,3 +613,152 @@ fn execute_renames_pair_and_undo_restores() {
 
     fs::remove_dir_all(&root).ok();
 }
+
+// ── OPERATION HISTORY ────────────────────────────────────────
+
+/// Fresh migrated DB in a temp dir — mirrors what `database::open` builds.
+fn temp_db(label: &str) -> (PathBuf, crate::database::Db) {
+    let dir = temp_tree(label);
+    let db = crate::database::open(&crate::database::default_db_path(&dir)).unwrap();
+    (dir, db)
+}
+
+fn entry(from: &str, to: &str) -> executor::JournalEntry {
+    executor::JournalEntry {
+        from: PathBuf::from(from),
+        to: PathBuf::from(to),
+    }
+}
+
+#[test]
+fn history_records_and_lists_newest_first() {
+    use crate::database::operations;
+    let (dir, db) = temp_db("history-list");
+    let conn = db.conn().unwrap();
+
+    operations::record(&conn, "rename", "completed", "1 file(s)", &[entry("/a", "/b")]).unwrap();
+    operations::record(
+        &conn,
+        "rename",
+        "completed",
+        "2 file(s)",
+        &[entry("/c", "/d"), entry("/e", "/f")],
+    )
+    .unwrap();
+
+    let rows = operations::list(&conn, 200).unwrap();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0].item_count, 2, "newest first");
+    assert_eq!(rows[1].item_count, 1);
+    assert!(rows.iter().all(|r| r.can_undo));
+    assert!(rows.iter().all(|r| r.undone_at.is_none()));
+    assert!(
+        rows.iter().all(|r| !r.created_at.is_empty()),
+        "created_at is defaulted by SQLite"
+    );
+
+    drop(conn);
+    fs::remove_dir_all(&dir).ok();
+}
+
+/// The regression this fixes: undo used to clear `undo_journal`, which was
+/// also the only source of `item_count` — the row survived but reported 0.
+#[test]
+fn history_row_keeps_item_count_after_undo() {
+    use crate::database::operations;
+    let (dir, db) = temp_db("history-undo");
+    let conn = db.conn().unwrap();
+
+    let id = operations::record(
+        &conn,
+        "rename",
+        "completed",
+        "2 file(s)",
+        &[entry("/a", "/b"), entry("/c", "/d")],
+    )
+    .unwrap();
+
+    let (found_id, journal) = operations::last_undoable(&conn).unwrap().unwrap();
+    assert_eq!(found_id, id);
+    assert_eq!(journal.len(), 2);
+
+    operations::mark_undone(&conn, id).unwrap();
+
+    let rows = operations::list(&conn, 200).unwrap();
+    assert_eq!(rows.len(), 1, "the row is kept, not deleted");
+    assert_eq!(rows[0].item_count, 2, "count survives the cleared journal");
+    assert!(!rows[0].can_undo, "no second undo");
+    assert!(rows[0].undone_at.is_some());
+    assert!(
+        operations::last_undoable(&conn).unwrap().is_none(),
+        "nothing left to undo"
+    );
+
+    drop(conn);
+    fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn history_records_failed_batch_without_journal() {
+    use crate::database::operations;
+    let (dir, db) = temp_db("history-failed");
+    let conn = db.conn().unwrap();
+
+    operations::record(&conn, "rename", "failed", "0 of 3 file(s)", &[]).unwrap();
+
+    let rows = operations::list(&conn, 200).unwrap();
+    assert_eq!(rows.len(), 1, "a failed attempt is still history");
+    assert_eq!(rows[0].status, "failed");
+    assert_eq!(rows[0].item_count, 0);
+    assert!(!rows[0].can_undo);
+    assert!(operations::last_undoable(&conn).unwrap().is_none());
+
+    drop(conn);
+    fs::remove_dir_all(&dir).ok();
+}
+
+/// A v1 database (journal-only schema, one row already undone) must migrate
+/// without losing rows and backfill counts from journal/summary.
+#[test]
+fn history_migrates_v1_rows_and_backfills_counts() {
+    use crate::database::operations;
+    let dir = temp_tree("history-migrate");
+    let path = crate::database::default_db_path(&dir);
+
+    {
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE _migrations (version INTEGER PRIMARY KEY, applied_at TEXT DEFAULT (datetime('now')));
+             INSERT INTO _migrations (version) VALUES (1);
+             CREATE TABLE operations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                kind TEXT NOT NULL,
+                summary TEXT NOT NULL,
+                status TEXT NOT NULL CHECK (status IN ('completed','failed','partial')),
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                undo_journal TEXT
+             );
+             INSERT INTO operations (kind, summary, status, undo_journal) VALUES
+                ('rename', '2 file(s)', 'completed',
+                 '[{\"from\":\"/a\",\"to\":\"/b\"},{\"from\":\"/c\",\"to\":\"/d\"}]'),
+                ('rename', '10 file(s)', 'completed', NULL);",
+        )
+        .unwrap();
+    }
+
+    let db = crate::database::open(&path).unwrap();
+    let conn = db.conn().unwrap();
+    let rows = operations::list(&conn, 200).unwrap();
+
+    assert_eq!(rows.len(), 2, "existing history is preserved");
+    let undone = rows.iter().find(|r| r.summary == "10 file(s)").unwrap();
+    assert_eq!(undone.item_count, 10, "backfilled from the summary text");
+    assert!(!undone.can_undo);
+    assert!(undone.undone_at.is_some());
+    let live = rows.iter().find(|r| r.summary == "2 file(s)").unwrap();
+    assert_eq!(live.item_count, 2, "backfilled from the journal");
+    assert!(live.can_undo);
+
+    drop(conn);
+    fs::remove_dir_all(&dir).ok();
+}

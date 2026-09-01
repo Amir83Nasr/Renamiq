@@ -75,7 +75,10 @@ export default function App() {
       style={{ "--sidebar-width": `${width}px` } as React.CSSProperties}
       className={dragging ? "**:transition-none!" : undefined}
     >
-      <div className="flex h-dvh flex-col overflow-hidden bg-background">
+      {/* min-w-0 + flex-1: the SidebarProvider wrapper is a row flex container,
+          so without these this column would shrink-to-fit its content instead
+          of tracking the window width. */}
+      <div className="flex h-dvh min-w-0 flex-1 flex-col overflow-hidden bg-background">
         <TooltipProvider>
           <TitleBar label={t(PAGE_LABEL[page])} />
           <div className="flex min-h-0 flex-1">
@@ -106,7 +109,10 @@ export default function App() {
                 <PostersPage />
               </div>
               <div className={page !== "history" ? "hidden" : "h-full w-full"}>
-                <HistoryPage />
+                {/* Pages stay mounted and are hidden with CSS, so History has
+                    to refetch on activation or it shows its startup snapshot
+                    (empty) forever. */}
+                <HistoryPage active={page === "history"} />
               </div>
               <div className={page !== "settings" ? "hidden" : "h-full w-full"}>
                 <SettingsPage />

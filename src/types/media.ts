@@ -123,6 +123,8 @@ export interface OperationHistoryItem {
   summary: string;
   status: string;
   createdAt: string;
+  /** Set once the operation has been reverted; null while still applied. */
+  undoneAt: string | null;
   canUndo: boolean;
   itemCount: number;
 }

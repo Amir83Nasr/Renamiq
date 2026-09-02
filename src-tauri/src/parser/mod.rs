@@ -67,6 +67,9 @@ pub fn parse_filename(raw: &str) -> ParsedMedia {
     let raw = ascii_digits(raw);
     let (stem, _ext) = split_stem_and_ext(&raw);
     let tokens = tokenize(stem);
+    // Hyphenated tokens hiding an S/E marker ("Squid-Game-S01-E04") split
+    // into segments first; everything else keeps hyphens intact.
+    let tokens = tokens::expand_hyphen_markers(&tokens);
 
     if let Some(hit) = tokens::find_episode_marker(&tokens) {
         return parse_tv(stem, &tokens, hit);
@@ -384,5 +387,24 @@ mod tests {
         let p = parse_filename("Jack-Reaper.2020.1080p.WEB-DL.mkv");
         assert_eq!(p.title, "Jack Reaper");
         assert_eq!(p.year, Some(2020));
+    }
+
+    #[test]
+    fn hyphenated_tv_marker() {
+        let p = parse_filename("Squid-Game-S01-E04.mkv");
+        assert_eq!(p.kind, MediaKind::Tv);
+        assert_eq!(p.title, "Squid Game");
+        assert_eq!(p.season, Some(1));
+        assert_eq!(p.episode, Some(4));
+    }
+
+    #[test]
+    fn hyphenated_combined_marker() {
+        let p = parse_filename("Money-Heist-S02E09.1080p.mkv");
+        assert_eq!(p.kind, MediaKind::Tv);
+        assert_eq!(p.title, "Money Heist");
+        assert_eq!(p.season, Some(2));
+        assert_eq!(p.episode, Some(9));
+        assert_eq!(p.resolution.as_deref(), Some("1080p"));
     }
 }

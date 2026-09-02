@@ -324,6 +324,17 @@ fn year_only_file_is_ready_movie() {
 }
 
 #[test]
+fn title_case_fix_counts_as_rename() {
+    // "House of dragons" needs a case-only rename to "House of Dragons" —
+    // case-insensitive comparison must not treat it as already correct.
+    let plan = build_plan(&unit_req(vec![video("House of dragons S2E7.mkv")]));
+    assert_eq!(plan.items.len(), 1, "case-only fix must stay in the plan");
+    let it = &plan.items[0];
+    assert_eq!(it.new_name, "House of Dragons S02 E07.mkv");
+    assert_eq!(it.status, ItemStatus::Ready);
+}
+
+#[test]
 fn hyphen_embedded_year_parses_title_and_year() {
     // "Toy-Story-5-2026-DUB_1080": year buried in a hyphenated token.
     let p = crate::parser::parse_filename("Toy-Story-5-2026-DUB_1080.mkv");

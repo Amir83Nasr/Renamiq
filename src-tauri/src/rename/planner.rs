@@ -199,7 +199,8 @@ pub fn build_plan(req: &PlanRequest) -> RenamePlan {
         let item = build_item(req, file, &ovr);
         // Correctly named AND healthy → nothing to do, drop from the plan.
         // Error items stay visible so the editor can fix them manually.
-        if item.status != ItemStatus::Error && norm_key(&item.destination) == norm_key(&item.path) {
+        // Case-sensitive compare: "House of dragons" → "House of Dragons" is a real rename.
+        if item.status != ItemStatus::Error && item.destination == item.path {
             continue;
         }
         items.push(item);
@@ -406,8 +407,9 @@ fn plan_subtitles(req: &PlanRequest, videos: &[ScannedFile], items: &mut Vec<Pla
         };
         let destination = host.directory.join(&new_name);
 
-        // Already correctly named → nothing to do.
-        if is_same_file(&destination, &file.path) {
+        // Already correctly named → nothing to do. Case-sensitive: a
+        // title-case fix on the host video must rename the sidecar too.
+        if destination == file.path {
             continue;
         }
 

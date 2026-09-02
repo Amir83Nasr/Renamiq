@@ -20,6 +20,53 @@ impl EpisodeHit {
     }
 }
 
+/// Split hyphenated tokens that carry an embedded S/E marker so the marker
+/// becomes addressable as its own token ("Squid-Game-S01-E04" → "Squid"
+/// "Game" "S01" "E04"). Tokens without a marker keep their hyphens intact so
+/// release groups and codecs ("x265-GROUP", "WEB-DL") survive.
+pub fn expand_hyphen_markers(tokens: &[String]) -> Vec<String> {
+    let mut out = Vec::with_capacity(tokens.len());
+    for t in tokens {
+        if t.contains('-') {
+            let segs: Vec<&str> = t.split('-').filter(|s| !s.is_empty()).collect();
+            if segments_have_episode_marker(&segs) {
+                out.extend(segs.into_iter().map(|s| s.to_string()));
+                continue;
+            }
+        }
+        out.push(t.clone());
+    }
+    out
+}
+
+/// True when a run of hyphen segments contains a recognizable S/E marker,
+/// either combined ("S01E04") or split across two segments ("S01" + "E04").
+fn segments_have_episode_marker(segs: &[&str]) -> bool {
+    for i in 0..segs.len() {
+        if parse_se_token(segs[i]).is_some() {
+            return true;
+        }
+        if is_season_only(segs[i]) && segs.get(i + 1).is_some_and(|next| is_episode_only(next)) {
+            return true;
+        }
+    }
+    false
+}
+
+/// "S01" / "S1" — an S followed by digits only.
+fn is_season_only(t: &str) -> bool {
+    t.len() >= 2
+        && (t.starts_with('S') || t.starts_with('s'))
+        && t[1..].chars().all(|c| c.is_ascii_digit())
+}
+
+/// "E04" / "E4" — an E followed by digits only.
+fn is_episode_only(t: &str) -> bool {
+    t.len() >= 2
+        && (t.starts_with('E') || t.starts_with('e'))
+        && t[1..].chars().all(|c| c.is_ascii_digit())
+}
+
 /// Find the strongest S/E marker in `tokens`. Returns the earliest match of
 /// the strongest pattern class (SxxExx beats 1x01).
 pub fn find_episode_marker(tokens: &[String]) -> Option<EpisodeHit> {
@@ -46,12 +93,8 @@ fn try_sxxexx_at(i: usize, tokens: &[String]) -> Option<EpisodeHit> {
         let season_end = 1 + t[1..].to_lowercase().find('e').unwrap_or(t.len() - 1);
         return finish_hit(i, s, vec![e], 1, season_end, tokens);
     }
-    // Split form: "S01 E01"
-    if t.len() >= 2
-        && (t.starts_with('S') || t.starts_with('s'))
-        && t[1..].chars().all(|c| c.is_ascii_digit())
-        && i + 1 < tokens.len()
-    {
+    // Split form: "S01 E01" (also across hyphens, pre-expanded).
+    if is_season_only(t) && i + 1 < tokens.len() {
         let next = &tokens[i + 1];
         let n = next.trim_start_matches(['E', 'e']);
         if n.len() < next.len() && n.chars().all(|c| c.is_ascii_digit()) {

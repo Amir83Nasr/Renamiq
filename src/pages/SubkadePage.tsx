@@ -2,7 +2,6 @@
 
 import {
   CheckCircle2,
-  Download,
   FolderOpen,
   ImageOff,
   Loader2,
@@ -11,6 +10,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
@@ -176,40 +177,42 @@ export default function SubkadePage() {
   };
 
   return (
-    <div className="flex h-full w-full flex-col gap-4 overflow-y-auto p-2">
-      <form
-        className="flex items-center gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void runSearch();
-        }}
-      >
-        <Input
-          dir="auto"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t("subkade.placeholder")}
-        />
-        <Button
-          type="submit"
-          size="sm"
-          className="shrink-0"
-          disabled={searching || !query.trim()}
+    <PageShell>
+      <PageHeader>
+        <form
+          className="flex flex-1 items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void runSearch();
+          }}
         >
-          {searching ? <Loader2 className="animate-spin" /> : <Search />}
-          {t("subkade.search")}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="shrink-0"
-          onClick={handleReset}
-        >
-          <RotateCcw className="size-4" />
-          {t("common.reset")}
-        </Button>
-      </form>
+          <Input
+            dir="auto"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("subkade.placeholder")}
+          />
+          <Button
+            type="submit"
+            size="sm"
+            className="shrink-0"
+            disabled={searching || !query.trim()}
+          >
+            {searching ? <Loader2 className="animate-spin" /> : <Search />}
+            {t("subkade.search")}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={handleReset}
+          >
+            <RotateCcw className="size-4" />
+            {t("common.reset")}
+          </Button>
+        </form>
+      </PageHeader>
 
       {/* Destination folder picker */}
       <div className="flex items-center gap-2">
@@ -256,7 +259,7 @@ export default function SubkadePage() {
               <span>{t("subkade.logTitle", { count: logs.length })}</span>
             </div>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
               onClick={() => setLogs([])}
@@ -295,101 +298,88 @@ export default function SubkadePage() {
         </div>
       )}
 
-      {/* Results list */}
-      <ul className="space-y-1">
-        {searching && (
-          <>
-            {[1, 2, 3, 4].map((i) => (
-              <li
-                key={i}
-                className="flex items-center gap-3 rounded-lg border p-2"
-              >
-                <Skeleton className="h-14 w-10 shrink-0 rounded" />
-                <div className="flex flex-1 flex-col gap-2">
-                  <Skeleton className="h-4 w-3/4" />
-                  <Skeleton className="h-3 w-16" />
-                </div>
-                <Skeleton className="size-4 shrink-0 rounded" />
-              </li>
-            ))}
-          </>
-        )}
+      {/* Results grid */}
+      <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-8">
+        {searching &&
+          [1, 2, 3, 4, 5, 6].map((i) => (
+            <li key={i} className="flex flex-col gap-1">
+              <Skeleton className="aspect-2/3 w-full rounded-lg" />
+              <Skeleton className="h-3 w-3/4" />
+            </li>
+          ))}
         {!searching &&
           results?.map((r) => {
             const isDownloading = downloading === r.url;
             const pct = progress[r.url];
             const knownSize = sizes[r.url];
             return (
-              <li key={r.url}>
+              <li key={r.url} className="flex flex-col gap-1">
                 <button
                   type="button"
-                  className="flex w-full flex-col gap-1.5 rounded-lg border px-3 py-2 text-start text-xs hover:bg-accent/50 disabled:opacity-50"
+                  className="group relative overflow-hidden rounded-lg border bg-accent/30 hover:bg-accent/60 disabled:opacity-50"
                   disabled={downloading !== null}
                   onClick={() => void handleCardClick(r)}
                 >
-                  <span className="flex w-full items-center gap-3">
-                    {r.image ? (
-                      <img
-                        src={r.image}
-                        alt=""
-                        loading="lazy"
-                        className="h-14 w-10 shrink-0 rounded object-cover"
-                        onError={(e) => {
-                          // Fallback to icon if image fails to load
-                          e.currentTarget.style.display = "none";
-                          e.currentTarget.nextElementSibling?.classList.remove(
-                            "hidden",
-                          );
-                        }}
-                      />
-                    ) : null}
-                    <span
-                      className={`flex h-14 w-10 shrink-0 items-center justify-center rounded bg-muted ${
-                        r.image ? "hidden" : ""
-                      }`}
-                    >
-                      <ImageOff className="size-5 text-muted-foreground" />
-                    </span>
-                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                      <span dir="ltr" className="truncate font-medium">
-                        {r.title}
-                      </span>
-                      {knownSize ? (
-                        <span className="text-[10px] text-muted-foreground tabular-nums">
-                          {formatSize(knownSize)}
-                        </span>
-                      ) : null}
-                    </span>
-                    {isDownloading ? (
-                      pct === null ? (
-                        <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
-                          {t("subkade.downloadingUnknown")}
-                        </span>
-                      ) : (
-                        <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
-                          {t("subkade.downloading", { percent: pct })}
-                        </span>
-                      )
-                    ) : (
-                      <Download className="size-4 shrink-0 text-muted-foreground" />
-                    )}
-                  </span>
-                  {isDownloading && <Progress value={pct} />}
+                  {r.image ? (
+                    <img
+                      src={r.image}
+                      alt={r.title}
+                      className="aspect-2/3 w-full object-cover"
+                      loading="lazy"
+                      onError={(e) => {
+                        // Fallback to placeholder icon if image fails to load
+                        // or is blocked
+                        const target = e.currentTarget;
+                        target.style.display = "none";
+                        if (target.nextElementSibling) {
+                          (
+                            target.nextElementSibling as HTMLElement
+                          ).style.display = "flex";
+                        }
+                      }}
+                    />
+                  ) : null}
+                  <div
+                    className={`flex aspect-2/3 w-full flex-col items-center justify-center gap-1 bg-accent/20 text-muted-foreground ${r.image ? "hidden" : "flex"}`}
+                  >
+                    <ImageOff className="size-8 opacity-50" />
+                  </div>
+                  {isDownloading && (
+                    <div className="absolute inset-x-0 bottom-0 bg-background/70 px-2 py-1 backdrop-blur-sm">
+                      <p className="mb-1 text-center text-[10px] text-muted-foreground tabular-nums">
+                        {pct === null
+                          ? t("subkade.downloadingUnknown")
+                          : t("subkade.downloading", { percent: pct })}
+                      </p>
+                      <Progress value={pct} />
+                    </div>
+                  )}
                 </button>
+                <p
+                  dir="ltr"
+                  className="truncate text-center text-[10px] text-muted-foreground"
+                >
+                  {r.title}
+                  {knownSize ? (
+                    <span className="ml-1 text-muted-foreground/60 tabular-nums">
+                      {formatSize(knownSize)}
+                    </span>
+                  ) : null}
+                </p>
               </li>
             );
           })}
         {results !== null && results.length === 0 && !searching && (
-          <li className="px-3 py-6 text-center text-xs text-muted-foreground">
+          <li className="col-span-full px-3 py-6 text-center text-xs text-muted-foreground">
             {t("subkade.notFound")}
           </li>
         )}
         {results === null && !searching && (
-          <li className="px-3 py-10 text-center text-xs text-muted-foreground">
+          <li className="col-span-full px-3 py-10 text-center text-xs text-muted-foreground">
             {t("subkade.hint")}
           </li>
         )}
       </ul>
-    </div>
+    </PageShell>
   );
 }

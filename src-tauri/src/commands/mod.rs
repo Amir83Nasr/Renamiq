@@ -123,8 +123,7 @@ pub fn undo_last_operation(db: State<'_, Db>) -> AppResult<String> {
     // cannot block other commands.
     let (op_id, journal) = {
         let conn = db.conn()?;
-        operations::last_undoable(&conn)?
-            .ok_or_else(|| RenamiqError::user("Nothing to undo"))?
+        operations::last_undoable(&conn)?.ok_or_else(|| RenamiqError::user("Nothing to undo"))?
     };
 
     let restored = executor::undo_journal(&journal)?;

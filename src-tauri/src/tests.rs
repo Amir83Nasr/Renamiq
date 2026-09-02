@@ -636,7 +636,14 @@ fn history_records_and_lists_newest_first() {
     let (dir, db) = temp_db("history-list");
     let conn = db.conn().unwrap();
 
-    operations::record(&conn, "rename", "completed", "1 file(s)", &[entry("/a", "/b")]).unwrap();
+    operations::record(
+        &conn,
+        "rename",
+        "completed",
+        "1 file(s)",
+        &[entry("/a", "/b")],
+    )
+    .unwrap();
     operations::record(
         &conn,
         "rename",

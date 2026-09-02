@@ -1,10 +1,11 @@
 // ── SUBKADE SUBTITLE SEARCH ──────────────────────────────────
 
-import { Download, Loader2, Search, X } from "lucide-react";
+import { FileImage, Loader2, Search, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Tooltip,
   TooltipContent,
@@ -100,7 +101,7 @@ export function SubkadeDialog({
         if (e.key === "Escape") onClose();
       }}
     >
-      <div className="flex max-h-[80vh] w-full max-w-lg flex-col gap-3 rounded-2xl border bg-card p-4 shadow-2xl">
+      <div className="flex max-h-[80vh] w-full max-w-2xl flex-col gap-3 rounded-2xl border bg-card p-4 shadow-2xl">
         <header className="flex items-center justify-between">
           <h3 className="text-sm font-semibold">{t("subkade.title")}</h3>
           <TooltipProvider>
@@ -148,43 +149,72 @@ export function SubkadeDialog({
           </p>
         )}
 
-        <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto">
-          {results?.map((r) => {
-            const isDownloading = downloading === r.url;
-            const pct = progress[r.url];
-            return (
-              <li key={r.url}>
-                <button
-                  type="button"
-                  className="flex w-full flex-col gap-1.5 rounded-lg border px-3 py-2 text-start text-xs hover:bg-accent/50 disabled:opacity-50"
-                  disabled={downloading !== null}
-                  onClick={() => void download(r)}
-                >
-                  <span className="flex w-full items-center justify-between gap-2">
-                    <span dir="ltr" className="truncate font-medium">
-                      {r.title}
-                    </span>
-                    {isDownloading ? (
-                      pct === null ? (
-                        <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
-                          {t("subkade.downloadingUnknown")}
-                        </span>
-                      ) : (
-                        <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
-                          {t("subkade.downloading", { percent: pct })}
-                        </span>
-                      )
-                    ) : (
-                      <Download className="size-4 shrink-0 text-muted-foreground" />
-                    )}
-                  </span>
-                  {isDownloading && <Progress value={pct} />}
-                </button>
+        <ul className="grid min-h-0 flex-1 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+          {searching &&
+            [1, 2, 3, 4, 5, 6].map((i) => (
+              <li key={i} className="flex flex-col gap-1">
+                <Skeleton className="aspect-2/3 w-full rounded-lg" />
+                <Skeleton className="h-3 w-3/4" />
               </li>
-            );
-          })}
+            ))}
+          {!searching &&
+            results?.map((r) => {
+              const isDownloading = downloading === r.url;
+              const pct = progress[r.url];
+              return (
+                <li key={r.url} className="flex flex-col gap-1">
+                  <button
+                    type="button"
+                    className="group relative overflow-hidden rounded-lg border bg-accent/30 hover:bg-accent/60 disabled:opacity-50"
+                    disabled={downloading !== null}
+                    onClick={() => void download(r)}
+                  >
+                    {r.image ? (
+                      <img
+                        src={r.image}
+                        alt={r.title}
+                        className="aspect-2/3 w-full object-cover"
+                        loading="lazy"
+                        onError={(e) => {
+                          // Fallback to placeholder icon if image fails to
+                          // load or is blocked
+                          const target = e.currentTarget;
+                          target.style.display = "none";
+                          if (target.nextElementSibling) {
+                            (
+                              target.nextElementSibling as HTMLElement
+                            ).style.display = "flex";
+                          }
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      className={`flex aspect-2/3 w-full flex-col items-center justify-center gap-1 bg-accent/20 text-muted-foreground ${r.image ? "hidden" : "flex"}`}
+                    >
+                      <FileImage className="size-8 opacity-50" />
+                    </div>
+                    {isDownloading && (
+                      <div className="absolute inset-x-0 bottom-0 bg-background/70 px-2 py-1 backdrop-blur-sm">
+                        <p className="mb-1 text-center text-[10px] text-muted-foreground tabular-nums">
+                          {pct === null
+                            ? t("subkade.downloadingUnknown")
+                            : t("subkade.downloading", { percent: pct })}
+                        </p>
+                        <Progress value={pct} />
+                      </div>
+                    )}
+                  </button>
+                  <p
+                    dir="ltr"
+                    className="truncate text-center text-[10px] text-muted-foreground"
+                  >
+                    {r.title}
+                  </p>
+                </li>
+              );
+            })}
           {results !== null && results.length === 0 && !searching && (
-            <li className="px-3 py-6 text-center text-xs text-muted-foreground">
+            <li className="col-span-full px-3 py-6 text-center text-xs text-muted-foreground">
               {t("subkade.empty")}
             </li>
           )}

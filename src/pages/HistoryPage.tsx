@@ -2,6 +2,8 @@
 
 import { RotateCcw } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageShell } from "@/components/layout/PageShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -48,23 +50,26 @@ export default function HistoryPage({ active }: { active: boolean }) {
   const undoIndex = ops?.findIndex((op) => op.canUndo) ?? -1;
 
   return (
-    <div className="flex h-full w-full min-h-0 flex-col gap-3 p-2">
-      <header className="flex items-center gap-2">
-        {ops && ops.length > 0 && (
-          <Badge variant="secondary">
-            {t("history.count", { count: ops.length })}
-          </Badge>
-        )}
-        <Button
-          size="sm"
-          variant="ghost"
-          className="ms-auto"
-          disabled={busy}
-          onClick={() => void load()}
-        >
-          <RotateCcw /> {t("history.refresh")}
-        </Button>
-      </header>
+    <PageShell>
+      <PageHeader
+        left={
+          ops && ops.length > 0 ? (
+            <Badge variant="secondary">
+              {t("history.count", { count: ops.length })}
+            </Badge>
+          ) : null
+        }
+        right={
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() => void load()}
+          >
+            <RotateCcw /> {t("history.refresh")}
+          </Button>
+        }
+      />
 
       {error ? (
         <div className="flex flex-1 flex-col items-center justify-center gap-3">
@@ -127,7 +132,7 @@ export default function HistoryPage({ active }: { active: boolean }) {
           </ul>
         </ScrollArea>
       )}
-    </div>
+    </PageShell>
   );
 }
 

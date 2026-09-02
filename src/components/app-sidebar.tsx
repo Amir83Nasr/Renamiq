@@ -2,6 +2,7 @@
 
 import {
   Download,
+  FolderSearch,
   History as HistoryIcon,
   Image,
   PackagePlus,
@@ -39,7 +40,7 @@ interface NavGroup {
 const NAV_GROUPS: NavGroup[] = [
   {
     labelKey: "nav.group.main",
-    items: [{ id: "workspace", icon: Image, labelKey: "nav.workspace" }],
+    items: [{ id: "workspace", icon: FolderSearch, labelKey: "nav.workspace" }],
   },
   {
     labelKey: "nav.group.downloads",

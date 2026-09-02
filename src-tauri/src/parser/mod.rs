@@ -242,7 +242,9 @@ fn join_title(tokens: &[String]) -> String {
         return String::new();
     }
 
-    let minor_words = ["of", "the", "and", "in", "on", "at", "to", "for", "a", "an", "with", "by", "from"];
+    let minor_words = [
+        "of", "the", "and", "in", "on", "at", "to", "for", "a", "an", "with", "by", "from",
+    ];
 
     raw_tokens
         .iter()

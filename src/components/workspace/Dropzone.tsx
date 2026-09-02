@@ -22,7 +22,7 @@ export function Dropzone() {
   };
 
   return (
-    <section className="rounded-2xl border bg-card p-4">
+    <section className="rounded-xl border bg-card p-4">
       <div
         className={cn(
           "flex flex-col items-center gap-5 rounded-xl border-2 border-dashed px-10 py-12 text-center transition-colors",

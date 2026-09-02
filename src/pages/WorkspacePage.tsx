@@ -9,7 +9,9 @@ import {
   ShieldCheck,
   XCircle,
 } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { useState } from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageShell } from "@/components/layout/PageShell";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -57,35 +59,38 @@ export default function WorkspacePage() {
     // Review phase fills the page exactly — no scrolling shell, or the
     // h-full chain below collapses and FileList's ScrollArea gets no height.
     <div className="flex h-full w-full min-h-0 flex-col">
-      <div className="flex min-h-0 flex-1 flex-col">
-        {/* Toolbar: batch summary + organize toggle + actions */}
-        <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b bg-background/60 px-2 py-3">
-          <Badge variant="secondary">
-            {t("workspace.fileCount", { count: ws.files.length })}
-          </Badge>
-          <span
-            className="flex items-center gap-1 text-xs text-success"
-            dir="ltr"
-          >
-            ● {counts.ready}
-          </span>
-          {counts.needsReview > 0 && (
-            <span className="text-xs text-warning" dir="ltr">
-              ● {counts.needsReview}
+      <PageHeader
+        className="px-2"
+        left={
+          <>
+            <Badge variant="secondary">
+              {t("workspace.fileCount", { count: ws.files.length })}
+            </Badge>
+            <span
+              className="flex items-center gap-1 text-xs text-success"
+              dir="ltr"
+            >
+              ● {counts.ready}
             </span>
-          )}
-          {counts.conflict > 0 && (
-            <span className="text-xs text-destructive" dir="ltr">
-              ● {counts.conflict}
-            </span>
-          )}
-          {counts.errors > 0 && (
-            <span className="text-xs text-destructive/70" dir="ltr">
-              ● {counts.errors}
-            </span>
-          )}
-
-          <div className="ms-auto flex flex-wrap items-center gap-x-3 gap-y-2">
+            {counts.needsReview > 0 && (
+              <span className="text-xs text-warning" dir="ltr">
+                ● {counts.needsReview}
+              </span>
+            )}
+            {counts.conflict > 0 && (
+              <span className="text-xs text-destructive" dir="ltr">
+                ● {counts.conflict}
+              </span>
+            )}
+            {counts.errors > 0 && (
+              <span className="text-xs text-destructive/70" dir="ltr">
+                ● {counts.errors}
+              </span>
+            )}
+          </>
+        }
+        right={
+          <>
             {/* biome-ignore lint/a11y/noLabelWithoutControl: Switch renders a button */}
             <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
               {t("workspace.organizeIntoFolders")}
@@ -124,14 +129,14 @@ export default function WorkspacePage() {
               </div>
             )}
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               disabled={ws.scanning || ws.planning}
               onClick={() => void ws.rescan()}
             >
               <RotateCw /> {t("workspace.rescan")}
             </Button>
-            <Button variant="ghost" size="sm" onClick={ws.clearAll}>
+            <Button variant="outline" size="sm" onClick={ws.clearAll}>
               <Eraser /> {t("workspace.clear")}
             </Button>
             <Button
@@ -142,31 +147,22 @@ export default function WorkspacePage() {
               <ShieldCheck />
               {t("confirm.rename")}
             </Button>
-          </div>
-        </header>
+          </>
+        }
+      />
 
-        <div className="flex min-h-0 flex-1">
-          <div className="flex min-w-0 flex-1 flex-col gap-2 p-2">
-            <FileList />
-          </div>
-          {ws.selected && <FileEditor key={ws.selected} />}
+      <div className="flex min-h-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col gap-2 p-2">
+          <FileList />
         </div>
-
-        <ConfirmDialog
-          open={confirming}
-          onConfirm={() => void runRename()}
-          onCancel={() => setConfirming(false)}
-        />
+        {ws.selected && <FileEditor key={ws.selected} />}
       </div>
-    </div>
-  );
-}
 
-/** Same centered column layout as the other pages. */
-function PageShell({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex h-full w-full flex-col gap-4 overflow-y-auto p-2">
-      {children}
+      <ConfirmDialog
+        open={confirming}
+        onConfirm={() => void runRename()}
+        onCancel={() => setConfirming(false)}
+      />
     </div>
   );
 }

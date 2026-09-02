@@ -2,6 +2,8 @@
 
 import { AppWindowMac, FolderInput, RotateCcw, Tag } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -103,11 +105,16 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex h-full w-full flex-col gap-4 overflow-y-auto px-4 py-5">
+    <PageShell padding="md" gap="md">
+      <PageHeader
+        left={<h1 className="text-sm font-bold">{t("nav.settings")}</h1>}
+        noBorder
+      />
+
       {/* ── ABOUT ──────────────────────────────────────────── */}
-      <section className="w-full space-y-3 rounded-2xl border bg-card p-5">
+      <section className="w-full space-y-3 rounded-xl border bg-card p-4">
         <div className="flex items-center gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
             <AppWindowMac className="size-5 text-primary" />
           </div>
           <div>
@@ -123,9 +130,9 @@ export default function SettingsPage() {
       </section>
 
       {/* ── NAMING TEMPLATES ──────────────────────────────── */}
-      <section className="w-full space-y-4 rounded-2xl border bg-card p-5">
+      <section className="w-full space-y-4 rounded-xl border bg-card p-4">
         <div className="flex items-center gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
             <Tag className="size-5 text-primary" />
           </div>
           <div>
@@ -195,9 +202,9 @@ export default function SettingsPage() {
       </section>
 
       {/* ── DESTINATION FOLDERS ───────────────────────────── */}
-      <section className="w-full space-y-4 rounded-2xl border bg-card p-5">
+      <section className="w-full space-y-4 rounded-xl border bg-card p-4">
         <div className="flex items-center gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
             <FolderInput className="size-5 text-primary" />
           </div>
           <div>
@@ -230,7 +237,7 @@ export default function SettingsPage() {
           {t("settings.folders.default")}
         </p>
       </section>
-    </div>
+    </PageShell>
   );
 }
 
@@ -280,7 +287,7 @@ function TemplateField({
           <Button
             type="button"
             size="sm"
-            variant="ghost"
+            variant="outline"
             className="h-6 gap-1 px-1.5 text-xs"
             onClick={onReset}
           >
@@ -345,7 +352,7 @@ function FolderRow({
           {t("settings.folders.pick")}
         </Button>
         {value && (
-          <Button type="button" variant="ghost" onClick={onClear}>
+          <Button type="button" variant="outline" onClick={onClear}>
             {t("settings.folders.clear")}
           </Button>
         )}

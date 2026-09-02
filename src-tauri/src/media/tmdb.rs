@@ -1,11 +1,9 @@
-//! OMDb (omdbapi.com) integration: search movies/TV by name and download
-//! the poster image. Uses the free OMDb API (api key "trilogy") or a user key.
+//! OMDb (omdbapi.com) and IMDb suggestion integration: search movies/TV by name
+//! and download the poster image. Uses the free OMDb API or IMDb suggestion API.
 use crate::core::error::{AppResult, RenamiqError};
 use serde::{Deserialize, Serialize};
 
 const API: &str = "https://www.omdbapi.com";
-/// ponytail: free public OMDb key; lets poster search work with zero setup.
-/// A user key from Settings wins.
 const FALLBACK_KEY: &str = "trilogy";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -16,19 +14,20 @@ pub struct TmdbResult {
     pub year: Option<u32>,
     /// True for TV shows, false for movies.
     pub is_tv: bool,
-    /// Full poster URL (Amazon CDN) or empty when the result has no poster.
+    /// Full poster URL or empty when the result has no poster.
     pub poster_url: String,
+    /// IMDb rank or sort weight for ranking results.
+    pub rank: u32,
 }
 
 fn http() -> AppResult<reqwest::blocking::Client> {
     reqwest::blocking::Client::builder()
-        .user_agent("Mozilla/5.0 (Renamiq)")
+        .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36")
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| RenamiqError::with_source("Network is unavailable", e))
 }
 
-/// OMDDb edge can be flaky; retry once before giving up.
 fn get_json(url: &str) -> AppResult<serde_json::Value> {
     let client = http()?;
     let mut last = RenamiqError::user("Search failed");
@@ -46,71 +45,102 @@ fn get_json(url: &str) -> AppResult<serde_json::Value> {
     Err(last)
 }
 
-/// Search IMDb suggestion API for official, high-quality movie & TV posters.
-pub fn search(query: &str, _api_key: &str, limit: u8) -> AppResult<Vec<TmdbResult>> {
+/// Search IMDb suggestion API and fall back to OMDb.
+/// Collects more results and sorts them by IMDb rank/popularity.
+pub fn search(query: &str, api_key: &str, limit: u8) -> AppResult<Vec<TmdbResult>> {
     let query = query.trim();
     if query.is_empty() {
         return Ok(Vec::new());
     }
-    let first_char = query.chars().next().unwrap_or('a').to_ascii_lowercase();
-    let enc = crate::media::subkade::utf8_percent_encode_pub(query);
-    let url = format!(
-        "https://v2.sg.media-imdb.com/suggestion/{}/{}.json",
-        first_char, enc
-    );
-
-    let client = http()?;
-    let resp = client.get(&url).send();
-    let json: serde_json::Value = match resp {
-        Ok(r) if r.status().is_success() => r.json().unwrap_or_default(),
-        _ => {
-            // Fallback to OMDb if IMDb suggestion fails
-            return search_omdb(query, _api_key, limit);
-        }
-    };
-
-    let Some(d) = json["d"].as_array() else {
-        return search_omdb(query, _api_key, limit);
-    };
 
     let mut out = Vec::new();
-    for item in d {
-        if out.len() >= limit as usize {
-            break;
-        }
-        let q_type = item["q"].as_str().unwrap_or_default();
-        if q_type != "feature" && q_type != "tvSeries" && q_type != "tvMiniSeries" {
+    let client = http()?;
+
+    // Try multiple prefixes to get broader coverage
+    let chars_to_try: Vec<char> = query
+        .chars()
+        .filter(|c| c.is_ascii_alphabetic())
+        .take(3)
+        .collect();
+
+    let mut tried_urls = std::collections::HashSet::new();
+
+    for ch in chars_to_try {
+        let enc = crate::media::subkade::utf8_percent_encode_pub(query);
+        let url = format!(
+            "https://v2.sg.media-imdb.com/suggestion/{}/{}.json",
+            ch.to_ascii_lowercase(),
+            enc
+        );
+        if !tried_urls.insert(url.clone()) {
             continue;
         }
-        let title = item["l"].as_str().unwrap_or_default().to_string();
-        if title.is_empty() {
-            continue;
+
+        if let Ok(resp) = client.get(&url).send() {
+            if resp.status().is_success() {
+                if let Ok(json) = resp.json::<serde_json::Value>() {
+                    if let Some(d) = json["d"].as_array() {
+                        for item in d {
+                            let q_type = item["q"].as_str().unwrap_or_default();
+                            if q_type != "feature"
+                                && q_type != "tvSeries"
+                                && q_type != "tvMiniSeries"
+                            {
+                                continue;
+                            }
+                            let title = item["l"].as_str().unwrap_or_default().to_string();
+                            if title.is_empty() {
+                                continue;
+                            }
+                            let year = item["y"].as_u64().map(|y| y as u32);
+                            let id_str = item["id"].as_str().unwrap_or_default();
+                            let id = id_str
+                                .trim_start_matches('t')
+                                .parse::<u64>()
+                                .unwrap_or_else(|_| {
+                                    id_str.bytes().fold(0, |acc, b| acc.wrapping_add(b as u64))
+                                });
+
+                            let is_tv = q_type.contains("tv");
+                            let poster_url = item["i"]["imageUrl"]
+                                .as_str()
+                                .unwrap_or_default()
+                                .to_string();
+                            let rank = item["rank"].as_u64().map(|r| r as u32).unwrap_or(999999);
+
+                            if !out.iter().any(|r: &TmdbResult| r.id == id) {
+                                out.push(TmdbResult {
+                                    id,
+                                    title,
+                                    year,
+                                    is_tv,
+                                    poster_url,
+                                    rank,
+                                });
+                            }
+                        }
+                    }
+                }
+            }
         }
-        let year = item["y"].as_u64().map(|y| y as u32);
-        let id_str = item["id"].as_str().unwrap_or_default();
-        let id = id_str
-            .trim_start_matches('t')
-            .parse::<u64>()
-            .unwrap_or_else(|_| id_str.bytes().fold(0, |acc, b| acc.wrapping_add(b as u64)));
-
-        let is_tv = q_type.contains("tv");
-        let poster_url = item["i"]["imageUrl"]
-            .as_str()
-            .unwrap_or_default()
-            .to_string();
-
-        out.push(TmdbResult {
-            id,
-            title,
-            year,
-            is_tv,
-            poster_url,
-        });
     }
 
-    if out.is_empty() {
-        return search_omdb(query, _api_key, limit);
+    // Also search OMDb to ensure comprehensive results
+    if let Ok(omdb_results) = search_omdb(query, api_key, 20) {
+        for r in omdb_results {
+            if !out.iter().any(|existing| {
+                existing.id == r.id || existing.title.eq_ignore_ascii_case(&r.title)
+            }) {
+                out.push(r);
+            }
+        }
     }
+
+    // Sort by rank ascending (lower rank number means higher popularity/importance in IMDb)
+    out.sort_by_key(|r| r.rank);
+
+    // Truncate to requested limit
+    out.truncate(limit as usize);
 
     Ok(out)
 }
@@ -136,7 +166,7 @@ fn search_omdb(query: &str, api_key: &str, limit: u8) -> AppResult<Vec<TmdbResul
         let Some(items) = json["Search"].as_array() else {
             continue;
         };
-        for item in items {
+        for (idx, item) in items.iter().enumerate() {
             if out.len() >= limit as usize {
                 break;
             }
@@ -151,7 +181,7 @@ fn search_omdb(query: &str, api_key: &str, limit: u8) -> AppResult<Vec<TmdbResul
             let poster = item["Poster"].as_str().unwrap_or("").to_string();
             let id = item["imdbID"]
                 .as_str()
-                .and_then(|s| s.parse::<u64>().ok())
+                .and_then(|s| s.trim_start_matches('t').parse::<u64>().ok())
                 .unwrap_or(0);
             out.push(TmdbResult {
                 id,
@@ -163,6 +193,8 @@ fn search_omdb(query: &str, api_key: &str, limit: u8) -> AppResult<Vec<TmdbResul
                 } else {
                     poster
                 },
+                // OMDb doesn't give rank, assign based on order + offset
+                rank: 50000 + (idx as u32),
             });
         }
     }

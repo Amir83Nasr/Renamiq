@@ -3,7 +3,6 @@
 import {
   AlertTriangle,
   Ban,
-  Captions,
   CircleCheck,
   CircleHelp,
   Film,
@@ -172,17 +171,18 @@ function FileRow({
   );
 }
 
+/** Subtitle sidecars have kind=Unknown but carry their host's
+ *  season/episode/year, so they render the same Tv/Film icon as the video
+ *  card they belong to; the language badge keeps them identifiable. */
 function KindIcon({ item }: { item: PlanItem }) {
-  const Icon = item.language ? Captions : item.kind === "tv" ? Tv : Film;
+  const isTv =
+    item.kind === "tv" || item.season !== null || item.episode !== null;
+  const Icon = isTv ? Tv : Film;
   return (
     <Icon
       className={cn(
         "mt-0.5 size-4 shrink-0",
-        item.language
-          ? "text-chart-4"
-          : item.kind === "tv"
-            ? "text-primary"
-            : "text-muted-foreground",
+        isTv ? "text-primary" : "text-muted-foreground",
       )}
     />
   );

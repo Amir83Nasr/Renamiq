@@ -10,6 +10,8 @@ import {
   Trash2,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { PageHeader } from "@/components/layout/PageHeader";
+import { PageShell } from "@/components/layout/PageShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
@@ -149,40 +151,42 @@ export default function PostersPage() {
   };
 
   return (
-    <div className="flex h-full w-full flex-col gap-4 overflow-y-auto p-2">
-      <form
-        className="flex items-center gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void runSearch();
-        }}
-      >
-        <Input
-          dir="auto"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={t("posters.placeholder")}
-        />
-        <Button
-          type="submit"
-          size="sm"
-          className="shrink-0"
-          disabled={searching || !query.trim()}
+    <PageShell>
+      <PageHeader>
+        <form
+          className="flex flex-1 items-center gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void runSearch();
+          }}
         >
-          {searching ? <Loader2 className="animate-spin" /> : <Search />}
-          {t("posters.search")}
-        </Button>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="shrink-0"
-          onClick={handleReset}
-        >
-          <RotateCcw className="size-4" />
-          {t("common.reset")}
-        </Button>
-      </form>
+          <Input
+            dir="auto"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={t("posters.placeholder")}
+          />
+          <Button
+            type="submit"
+            size="sm"
+            className="shrink-0"
+            disabled={searching || !query.trim()}
+          >
+            {searching ? <Loader2 className="animate-spin" /> : <Search />}
+            {t("posters.search")}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="shrink-0"
+            onClick={handleReset}
+          >
+            <RotateCcw className="size-4" />
+            {t("common.reset")}
+          </Button>
+        </form>
+      </PageHeader>
 
       {/* Destination folder picker */}
       <div className="flex items-center gap-2">
@@ -229,7 +233,7 @@ export default function PostersPage() {
               <span>{t("posters.done", { file: logs[0].file })}</span>
             </div>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               className="h-6 px-2 text-[10px] text-muted-foreground hover:text-foreground"
               onClick={() => setLogs([])}
@@ -243,16 +247,13 @@ export default function PostersPage() {
 
       {/* Results grid */}
       <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 2xl:grid-cols-8">
-        {searching && (
-          <>
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <li key={i} className="flex flex-col gap-1">
-                <Skeleton className="aspect-2/3 w-full rounded-lg" />
-                <Skeleton className="h-3 w-3/4" />
-              </li>
-            ))}
-          </>
-        )}
+        {searching &&
+          [1, 2, 3, 4, 5, 6].map((i) => (
+            <li key={i} className="flex flex-col gap-1">
+              <Skeleton className="aspect-2/3 w-full rounded-lg" />
+              <Skeleton className="h-3 w-3/4" />
+            </li>
+          ))}
         {!searching &&
           results?.map((r) => {
             const isDownloading = downloading === r.id;
@@ -324,6 +325,6 @@ export default function PostersPage() {
           </li>
         )}
       </ul>
-    </div>
+    </PageShell>
   );
 }

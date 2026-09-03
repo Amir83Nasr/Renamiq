@@ -58,6 +58,10 @@ export interface FileOverride {
   language?: string;
   customName?: string;
   exclude?: boolean;
+  /** Drop the season marker from the name (and Season folder when organizing). */
+  includeSeason?: boolean;
+  /** Episode padding width: 2 → "E01", 3 → "E001". Default 2. */
+  episodeDigits?: number;
 }
 
 /** One file in the rename plan. */

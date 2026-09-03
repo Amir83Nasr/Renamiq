@@ -48,6 +48,11 @@ pub struct FileOverride {
     pub language: Option<String>,
     pub custom_name: Option<String>,
     pub exclude: bool,
+    /// Drop the season marker from the name (and the Season folder when
+    /// organizing). None = keep seasons.
+    pub include_season: Option<bool>,
+    /// Episode padding width: 2 → "E01", 3 → "E001". None = 2.
+    pub episode_digits: Option<u8>,
 }
 
 /// One file in the rename plan: source, proposed destination, status.
@@ -152,6 +157,9 @@ struct EffectiveMeta {
     audio: Option<String>,
     group: Option<String>,
     edition: Option<String>,
+    /// Per-file naming options (default on / 2 digits).
+    include_season: bool,
+    episode_digits: u8,
 }
 
 fn effective(parsed: &ParsedMedia, ovr: &FileOverride) -> EffectiveMeta {
@@ -178,6 +186,8 @@ fn effective(parsed: &ParsedMedia, ovr: &FileOverride) -> EffectiveMeta {
         audio: parsed.audio.clone(),
         group: parsed.group.clone(),
         edition: parsed.edition.clone(),
+        include_season: ovr.include_season.unwrap_or(true),
+        episode_digits: ovr.episode_digits.unwrap_or(2),
     }
 }
 
@@ -322,7 +332,14 @@ fn build_item(req: &PlanRequest, file: &ScannedFile, ovr: &FileOverride) -> Plan
 
     let ext = extension_of(&file.name);
     let new_name = format!("{stem}{ext}");
-    let directory = directory_for(req, file, meta.kind, &meta.title, meta.season);
+    let directory = directory_for(
+        req,
+        file,
+        meta.kind,
+        &meta.title,
+        meta.season,
+        meta.include_season,
+    );
     let mut destination = directory.join(&new_name);
     if stem.is_empty() {
         // Error state: point destination at source so nothing can execute.
@@ -502,12 +519,38 @@ fn render_stem(kind: MediaKind, m: &EffectiveMeta, tpl: Option<&PlanTemplates>) 
             }
         }),
     };
-    let mut stem = render_template(t, &parsed);
+    // Per-file options rewrite the template before rendering: seasons can be
+    // stripped and episode padding widened (E01 → E001).
+    let mut template = t.to_string();
+    if !m.include_season {
+        // "S{season:02}" — the S is literal template text, so strip it with
+        // its variable. Leftover double spaces collapse at render time.
+        for marker in [
+            "S{season:02}",
+            "S{season:2}",
+            "S{season}",
+            "{season:02}",
+            "{season:2}",
+            "{season}",
+        ] {
+            template = template.replace(marker, "");
+        }
+    }
+    if m.episode_digits != 2 {
+        let padded = format!("{{episode:0{}}}", m.episode_digits);
+        template = template.replace("{episode:02}", &padded);
+        template = template.replace("{episode:2}", &padded);
+        template = template.replace("{episode}", &padded);
+    }
+    let mut stem = render_template(&template, &parsed);
     // Multi-episode: "Show Name S01 E01" + episodes [1, 2, 3] → "... E01-E02-E03".
     if kind == MediaKind::Tv {
         if let Some(last) = m.episodes.as_ref().and_then(|e| e.last()) {
             if Some(*last) != parsed.episode {
-                stem = format!("{stem}-E{last:0>2}");
+                stem = format!(
+                    "{stem}-E{last:0>digits$}",
+                    digits = m.episode_digits as usize
+                );
             }
         }
     }
@@ -522,6 +565,7 @@ fn directory_for(
     kind: MediaKind,
     title: &str,
     season: Option<u8>,
+    include_season: bool,
 ) -> PathBuf {
     let flat = file
         .path
@@ -542,11 +586,18 @@ fn directory_for(
         .unwrap_or_else(|| req.root.join("TV Shows"));
     match kind {
         MediaKind::Movie => movie_root.join(sanitize_filename(title)),
-        MediaKind::Tv => tv_root.join(sanitize_filename(title)).join(
-            season
-                .map(|s| format!("Season {s:02}"))
-                .unwrap_or_else(|| "Season 01".into()),
-        ),
+        MediaKind::Tv => {
+            let base = tv_root.join(sanitize_filename(title));
+            if include_season {
+                base.join(
+                    season
+                        .map(|s| format!("Season {s:02}"))
+                        .unwrap_or_else(|| "Season 01".into()),
+                )
+            } else {
+                base
+            }
+        }
         MediaKind::Unknown => flat,
     }
 }

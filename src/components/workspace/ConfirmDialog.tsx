@@ -35,7 +35,10 @@ export function ConfirmDialog({
       open={open && executable.length > 0}
       onOpenChange={(o) => !o && onCancel()}
     >
-      <AlertDialogContent size="default" className="max-w-xl!">
+      <AlertDialogContent
+        size="default"
+        className="max-w-xl! max-h-[85dvh]! overflow-y-auto"
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>
             {t("confirm.title", { count: executable.length })}
@@ -79,11 +82,11 @@ export function ConfirmDialog({
           >
             {executable.map((i) => (
               <li key={i.path} className="flex items-center gap-2 px-1 py-0.5">
-                <span className="truncate text-xs text-muted-foreground line-through">
+                <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground line-through">
                   {i.originalName}
                 </span>
                 <ArrowRight className="size-3 shrink-0 text-muted-foreground/60" />
-                <span className="truncate text-xs font-semibold">
+                <span className="min-w-0 flex-1 truncate text-right text-xs font-semibold">
                   {i.newName}
                 </span>
               </li>

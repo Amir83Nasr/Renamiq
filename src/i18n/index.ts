@@ -59,6 +59,15 @@ export const dictionaries = {
     "editor.customNameHint": "Enter the final name directly",
     "editor.exclude": "Exclude",
     "editor.preview": "Preview",
+    "editor.customize": "Customize",
+    "editor.customizeTitle": "Customize file options",
+    "editor.customizeHint":
+      "Override naming for this file. Toggle off the season marker or pad episodes to 3 digits.",
+    "editor.customizeApply": "Apply",
+    "editor.includeSeason": "Include season in name",
+    "editor.episodeDigits": "Episode digits",
+    "editor.episodeDigits.2": "2 digits (E01)",
+    "editor.episodeDigits.3": "3 digits (E001)",
 
     "subtitle.language": "Subtitle language",
     "subtitle.attachedTo": "Attached to video",

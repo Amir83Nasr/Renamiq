@@ -1,6 +1,6 @@
 // ── FILE EDITOR (MANUAL OVERRIDE) ────────────────────────────
 
-import { Captions as CaptionsIcon, EyeOff, X } from "lucide-react";
+import { Captions as CaptionsIcon, EyeOff, Settings, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { CustomizeDialog } from "@/components/workspace/CustomizeDialog";
 import { SubkadeDialog } from "@/components/workspace/SubkadeDialog";
 import { type MessageKey, t } from "@/i18n";
 import { useWorkspace } from "@/stores/workspace";
@@ -30,6 +31,7 @@ export function FileEditor() {
   } = useWorkspace();
 
   const [subkadeOpen, setSubkade] = useState(false);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
   const file = files.find((f) => f.path === selected);
   const item = plan?.items.find((i) => i.path === selected);
   const ovr = selected ? (overrides[selected] ?? {}) : {};
@@ -88,9 +90,18 @@ export function FileEditor() {
       </Tooltip>
 
       {!isSubtitle && (
-        <Button variant="outline" size="sm" onClick={() => setSubkade(true)}>
-          <CaptionsIcon /> {t("subkade.download")}
-        </Button>
+        <div className="grid grid-cols-2 gap-2">
+          <Button variant="outline" size="sm" onClick={() => setSubkade(true)}>
+            <CaptionsIcon /> {t("subkade.download")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCustomizeOpen(true)}
+          >
+            <Settings /> {t("editor.customize")}
+          </Button>
+        </div>
       )}
 
       {isSubtitle ? (
@@ -246,6 +257,11 @@ export function FileEditor() {
           onClose={() => setSubkade(false)}
         />
       )}
+      <CustomizeDialog
+        filePath={file.path}
+        open={customizeOpen}
+        onClose={() => setCustomizeOpen(false)}
+      />
     </aside>
   );
 }
